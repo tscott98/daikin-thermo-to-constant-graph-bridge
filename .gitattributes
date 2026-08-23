@@ -1,0 +1,5 @@
+# Normalize line endings: LF in the repository and in every working copy,
+# regardless of each contributor's core.autocrlf setting. Without this, the
+# Windows default rewrites every file to CRLF on checkout and the next commit
+# from another platform shows every line as changed.
+* text=auto eol=lf
