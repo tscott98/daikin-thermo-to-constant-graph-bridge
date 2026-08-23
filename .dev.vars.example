@@ -1,0 +1,16 @@
+# Copy to .dev.vars and fill in. .dev.vars is gitignored; this example is not.
+# In production these are set with `wrangler secret put <NAME>` instead.
+
+TURSO_DATABASE_URL=libsql://daikin-<your-org>.turso.io
+TURSO_AUTH_TOKEN=
+
+DAIKIN_API_KEY=
+DAIKIN_EMAIL=
+DAIKIN_INTEGRATOR_TOKEN=
+
+# Must be the API key for the ConstantGraph location you want this data in.
+# The key alone decides where data lands; there is no location field in the payload.
+CG_API_KEY=
+
+# Guards this Worker's own /api and /admin routes. Generate: openssl rand -hex 32
+READ_API_KEY=

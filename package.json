@@ -1,0 +1,28 @@
+{
+  "name": "daikin-one-constant-graph",
+  "version": "1.0.0",
+  "private": true,
+  "license": "MIT",
+  "author": "Tim Scott",
+  "description": "Polls a Daikin One thermostat and bridges the readings into ConstantGraph, keeping full history in Turso.",
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "tail": "wrangler tail",
+    "db:init": "turso db shell daikin < migrations/0001_init.sql",
+    "db:shell": "turso db shell daikin"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20260823.1",
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.11",
+    "wrangler": "^4.125.0"
+  },
+  "dependencies": {
+    "@libsql/client": "^0.17.4"
+  }
+}

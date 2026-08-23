@@ -1,0 +1,31 @@
+name = "daikin-one-constant-graph"
+main = "src/index.ts"
+compatibility_date = "2026-08-01"
+
+# The ops endpoints need a public URL. Per-version preview URLs are off: they
+# would keep every past version publicly reachable, and this project deploys
+# straight to production rather than previewing versions first.
+workers_dev = true
+preview_urls = false
+
+# Poll every 5 minutes. Daikin's documented floor is one request per 3 minutes;
+# 5 leaves headroom for a retry without breaching it.
+[triggers]
+crons = ["*/5 * * * *"]
+
+[vars]
+CHANNEL_BASE = "1000"
+POLL_INTERVAL_MIN = "5"
+PUBLISH_BATCH = "200"
+RAW_RETENTION_DAYS = "30"
+DRY_RUN = "false"
+CG_APP_NAME = "daikin-one-bridge"
+
+# Secrets (set with `wrangler secret put <NAME>`, never committed):
+#   TURSO_DATABASE_URL       libsql://<db>-<org>.turso.io
+#   TURSO_AUTH_TOKEN         from `turso db tokens create daikin`
+#   DAIKIN_API_KEY           x-api-key from SkyportHome developer mode
+#   DAIKIN_EMAIL             account email, used in the token request body
+#   DAIKIN_INTEGRATOR_TOKEN  integrator token from home integration settings
+#   CG_API_KEY               ConstantGraph API key
+#   READ_API_KEY             self-issued key guarding this Worker's own read API
