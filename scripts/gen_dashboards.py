@@ -10,8 +10,12 @@ sensor the data came from. See todo.md for the reasoning.
 """
 import json
 
+# Panel URLs keep a leading slash. The Infinity data source joins them onto its
+# base URL, and that base may or may not carry a trailing slash depending on how
+# it was configured -- a leading slash works either way, because the Worker
+# collapses duplicate slashes in the request path.
 DS = {"type": "yesoreyeram-infinity-datasource", "uid": "${DS_INFINITY}"}
-BASE_URL = "api/series?from=$__from&to=$__to&interval=$__interval_ms&device=$device"
+BASE_URL = "/api/series?from=$__from&to=$__to&interval=$__interval_ms&device=$device"
 
 
 def target(columns, url=BASE_URL, fmt="timeseries"):
@@ -63,7 +67,7 @@ OK_BAD = {"mode": "absolute", "steps": [
     {"color": "green", "value": None}, {"color": "red", "value": 1}]}
 
 
-def dashboard(title, description, panels, refresh="5m", time_from="now-7d", tags=None):
+def dashboard(uid, title, description, panels, refresh="5m", time_from="now-7d", tags=None):
     return {
         "__inputs": [{
             "name": "DS_INFINITY", "label": "Infinity data source", "type": "datasource",
@@ -72,6 +76,10 @@ def dashboard(title, description, panels, refresh="5m", time_from="now-7d", tags
         }],
         "__requires": [{"type": "datasource", "id": "yesoreyeram-infinity-datasource",
                         "name": "Infinity", "version": "1.0.0"}],
+        # A stable uid makes a re-push an update rather than a new copy.
+        # Without it Grafana mints a fresh uid each time and the dashboard list
+        # fills with near-identical duplicates.
+        "uid": uid,
         "title": title, "description": description,
         "schemaVersion": 39, "editable": True, "graphTooltip": 1,
         "refresh": refresh, "time": {"from": time_from, "to": "now"},
@@ -113,7 +121,7 @@ ENERGY = [
     panel(3, "Power vs outdoor temperature",
           [("outdoor_f", "Outdoor"), ("sp_outdoor_power", "Power")],
           {"h": 9, "w": 12, "x": 0, "y": 8}, unit="watt", ptype="xychart", fmt="table",
-          url="api/series?from=$__from&to=$__to&interval=3600&device=$device",
+          url="/api/series?from=$__from&to=$__to&interval=3600&device=$device",
           desc="The efficiency curve. Hourly buckets. Rising power at a given "
                "outdoor temperature, compared across seasons, is how degradation "
                "shows up before anything feels wrong.",
@@ -126,7 +134,7 @@ ENERGY = [
     panel(4, "Compressor modulation vs outdoor temperature",
           [("outdoor_f", "Outdoor"), ("sp_compressor_rps", "Compressor RPS")],
           {"h": 9, "w": 12, "x": 12, "y": 8}, ptype="xychart", fmt="table",
-          url="api/series?from=$__from&to=$__to&interval=3600&device=$device",
+          url="/api/series?from=$__from&to=$__to&interval=3600&device=$device",
           desc="Whether the inverter actually modulates or just cycles on and "
                "off. A spread of speeds across temperatures is the behaviour a "
                "variable-speed system is sold on; clustering at one speed is not.",
@@ -250,12 +258,14 @@ if __name__ == "__main__":
 
     out = {
         "grafana/dashboard-energy.json": dashboard(
+            "daikin-energy",
             "Daikin — Energy & Efficiency",
             "What the system costs to run and whether it is performing as it should. "
             "Defaults to 30 days; a single day says nothing about cost.",
             ENERGY, refresh="15m", time_from="now-30d",
             tags=["daikin", "energy"]),
         "grafana/dashboard-health.json": dashboard(
+            "daikin-health",
             "Daikin — System Health & Diagnostics",
             "Whether anything is wrong or slowly getting worse. Defaults to 14 days "
             "so slow trends are visible; widen to months for superheat.",

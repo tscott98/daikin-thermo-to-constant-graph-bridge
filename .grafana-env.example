@@ -1,0 +1,8 @@
+# Copy to .grafana-env and fill in. .grafana-env is gitignored.
+#
+# Create at: Administration -> Users and access -> Service accounts
+#   Role: Editor (sufficient for dashboards and alert rules; not Admin)
+# Revoke the same way if it is ever exposed.
+
+GRAFANA_URL=https://your-stack.grafana.net
+GRAFANA_TOKEN=glsa_...

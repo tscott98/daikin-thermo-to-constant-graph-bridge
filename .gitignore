@@ -17,3 +17,9 @@ probe/
 
 # Python cache from scripts/*.py
 __pycache__/
+
+# Grafana service account token; never committed
+.grafana-env
+
+# Scratch space for API responses
+.tmp/
