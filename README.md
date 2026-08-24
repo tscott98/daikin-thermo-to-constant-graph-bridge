@@ -201,14 +201,21 @@ is the usual cause of "Data is missing a time field".
 **Alerting.** `/health` is unauthenticated and returns `seconds_since_last_reading`, so an alert
 on that crossing ~600 tells you collection has stopped. That is the one alert worth having.
 
-**Available columns:** `time` (ISO-8601), `ts_ms` (epoch ms), `device_id`, `samples`, `indoor_f`,
-`outdoor_f`, `heat_setpoint_f`, `cool_setpoint_f`, `hum_indoor`, `hum_outdoor`, `delta_f`,
-`mode`, `equipment_status`, `runtime_heat_min`, `runtime_cool_min`, `pct_running`.
+**Available columns.** Integrator-API metrics: `time` (ISO-8601), `ts_ms` (epoch ms),
+`device_id`, `samples`, `indoor_f`, `outdoor_f`, `heat_setpoint_f`, `cool_setpoint_f`,
+`hum_indoor`, `hum_outdoor`, `delta_f`, `mode`, `equipment_status`, `runtime_heat_min`,
+`runtime_cool_min`, `pct_running`.
+
+Skyport metrics (see below): all 38 `sp_*` columns from `readings`, aggregated by bucket. Most
+average; `sp_compressor_runtime` and the six `sp_fault_*` columns take the bucket maximum
+instead, for the reasons in the next paragraph.
 
 Aggregation is per metric rather than a blanket average, which matters once a panel spans more
 than a few days: sensor readings average, runtime minutes sum so a daily bucket reports real
-minutes, and `mode`/`equipment_status` take the maximum so a bucket shows the system ran at all
-rather than a meaningless fraction.
+minutes, `mode`/`equipment_status` take the maximum so a bucket shows the system ran at all
+rather than a meaningless fraction, fault codes take the maximum so a fault anywhere in the
+bucket is not averaged away, and `sp_compressor_runtime` — a cumulative counter, not a level —
+takes the maximum so a client can difference it between buckets for exact runtime.
 
 Query parameters: `from`, `to` (epoch seconds or milliseconds), `interval` (bucket size in
 seconds or milliseconds, omit for raw 5-minute rows), `device`, `limit` (max 20,000), and

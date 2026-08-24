@@ -11,7 +11,7 @@
 import type { InStatement, Row } from '@libsql/client/web';
 import type { Db } from './client';
 import type { DeviceDetail, DeviceSummary } from '../daikin/types';
-import { EMPTY_SKYPORT, type SkyportFields } from '../skyport/map';
+import { EMPTY_SKYPORT, SKYPORT_COLUMNS, type SkyportFields } from '../skyport/map';
 
 export interface Reading extends SkyportFields {
   device_id: string;
@@ -365,13 +365,44 @@ export interface SeriesOptions {
 }
 
 /**
+ * Aggregation per Skyport column for /api/series.
+ *
+ * Most are continuous measurements and average sensibly. Three groups do not:
+ *   - sp_compressor_runtime is a cumulative counter, not a level -- MAX gives
+ *     the running total as of the end of the bucket, which is what a client
+ *     needs to difference between buckets for true interval runtime.
+ *   - fault codes should surface if ANY sample in the bucket faulted, which
+ *     AVG would blur into a meaningless fraction.
+ *   - sp_reversing_valve is a discrete heat/cool state, not a level.
+ */
+const SKYPORT_MAX_COLUMNS = new Set<string>([
+  'sp_compressor_runtime',
+  'sp_reversing_valve',
+  'sp_fault_od_critical',
+  'sp_fault_od_minor',
+  'sp_fault_ifc_critical',
+  'sp_fault_ifc_minor',
+  'sp_fault_stat_critical',
+  'sp_fault_stat_minor',
+]);
+
+export function skyportSelectClause(): string {
+  return SKYPORT_COLUMNS.map((c) =>
+    SKYPORT_MAX_COLUMNS.has(c)
+      ? `MAX(${c}) AS ${c}`
+      : `ROUND(AVG(${c}), 2) AS ${c}`,
+  ).join(',\n            ');
+}
+
+/**
  * Time-bucketed rows for charting, converted to Fahrenheit on the way out.
  *
  * Aggregation is chosen per metric rather than averaging everything: sensor
  * readings average, runtime minutes sum (so a bucket reports real minutes), and
  * mode/equipment status take the max so a bucket shows the system ran at all
  * rather than a meaningless fractional state. `pct_running` is the useful
- * downsampled view of equipment status.
+ * downsampled view of equipment status. Skyport columns follow the same
+ * principle via skyportSelectClause().
  *
  * bucketSec = 1 collapses to raw rows, since (ts / 1) * 1 = ts.
  */
@@ -403,7 +434,8 @@ export async function getSeries(db: Db, o: SeriesOptions): Promise<Row[]> {
             SUM(CASE WHEN equipment_status = 3            THEN 5 ELSE 0 END) AS runtime_heat_min,
             SUM(CASE WHEN equipment_status IN (1, 2)      THEN 5 ELSE 0 END) AS runtime_cool_min,
             ROUND(AVG(CASE WHEN equipment_status IN (1,2,3) THEN 1.0 ELSE 0.0 END) * 100, 1)
-                                                                    AS pct_running
+                                                                    AS pct_running,
+            ${skyportSelectClause()}
           FROM readings
           WHERE ${where.join(' AND ')}
           GROUP BY device_id, (ts / ?)
