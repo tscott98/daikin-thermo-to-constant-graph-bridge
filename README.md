@@ -167,8 +167,11 @@ for metrics) don't apply, because the history stays in Turso.
 - Under *Headers*, add `X-Api-Key` with your `READ_API_KEY`
 - Under *Security → Allowed hosts*, add the same origin
 
-**Import the dashboard.** [`grafana/dashboard.json`](grafana/dashboard.json) has six panels
-pre-wired. Dashboards → New → Import → paste the file, then pick your Infinity data source when
+**Import the dashboard.** [`grafana/dashboard-v2.json`](grafana/dashboard-v2.json) is the
+current one, in the `dashboard.grafana.app/v2` schema, with six panels pre-wired.
+[`grafana/dashboard.json`](grafana/dashboard.json) is the same dashboard in the classic
+schema for older Grafana. The v2 file references its data source by UID, so change that to
+yours after importing; the classic file prompts for it instead. Dashboards → New → Import → paste the file, then pick your Infinity data source when
 prompted. It ships with a `device` textbox variable; leave it blank for all thermostats or paste
 an ID from `/api/stats`.
 

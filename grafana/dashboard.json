@@ -927,23 +927,13 @@
             "x": {
               "matcher": {
                 "id": "byName",
-                "options": {
-                  "matcher": {
-                    "id": "byName",
-                    "options": "Outdoor"
-                  }
-                }
+                "options": "Outdoor"
               }
             },
             "y": {
               "matcher": {
                 "id": "byName",
-                "options": {
-                  "matcher": {
-                    "id": "byName",
-                    "options": "Running"
-                  }
-                }
+                "options": "Running"
               }
             }
           }
