@@ -48,6 +48,18 @@ FIELDS = [
     ("sp_aq_outdoor_ozone",      "aqOutdoorOzone",                    "raw", "outdoor ozone, ppb"),
     ("sp_aq_outdoor_particles",  "aqOutdoorParticles",                "raw", "outdoor particulates, ug/m3"),
 
+    # Dehumidification chain, added for the dehumidification analysis. The
+    # question these answer is whether a dehum call is ever *requested*: if it
+    # is always zero, the humidity target is misconfigured and no amount of
+    # equipment-side airflow tuning can matter.
+    ("sp_dehum_demand_pct",      "ctOutdoorDeHumidificationRequestedDemand", "pct2", "outdoor dehum demand, %"),
+    ("sp_alg_dehum_demand",      "ctControlAlgorithmDehumDemand",     "pct2","control algorithm dehum demand, %"),
+    ("sp_alg_overcool_demand",   "ctControlAlgorithmOvercoolDemand",  "pct2","overcool-to-dehumidify demand, %"),
+    ("sp_alg_cool_demand",       "ctControlAlgorithmCoolDemand",      "pct2","control algorithm cool demand, %; context for the dehum figures"),
+    ("sp_requested_airflow",     "ctOutdoorRequestedIndoorAirflow",   "raw", "commanded indoor CFM; compare against sp_indoor_airflow"),
+    ("sp_fan_actual_pct",        "ctIFCCurrentFanActualStatus",       "pct2","actual indoor fan output, %"),
+    ("sp_compressor_reduction",  "ctOutdoorCompressorReductionMode",  "raw", "compressor reduction mode, enum"),
+
     ("sp_fault_od_critical",     "ctOutdoorCriticalFault",            "raw", "0 = none"),
     ("sp_fault_od_minor",        "ctOutdoorMinorFault",               "raw", "0 = none"),
     ("sp_fault_ifc_critical",    "ctIFCCriticalFault",                "raw", "0 = none"),

@@ -2,7 +2,8 @@
  * Skyport wire format -> stored columns.
  *
  * Generated from scripts/gen_skyport_fields.py, which is also the source for
- * migration 0003. Keep the two in step by regenerating rather than hand-editing.
+ * migrations 0003 and 0004. Keep the two in step by regenerating rather than
+ * hand-editing.
  *
  * Every field here was observed populated and non-sentinel on real hardware
  * (a ONETOUCH driving an inverter heat pump). Fields that read as sentinels on
@@ -50,6 +51,13 @@ export interface SkyportFields {
   sp_zone1_damper: number | null;
   sp_aq_outdoor_ozone: number | null;
   sp_aq_outdoor_particles: number | null;
+  sp_dehum_demand_pct: number | null;
+  sp_alg_dehum_demand: number | null;
+  sp_alg_overcool_demand: number | null;
+  sp_alg_cool_demand: number | null;
+  sp_requested_airflow: number | null;
+  sp_fan_actual_pct: number | null;
+  sp_compressor_reduction: number | null;
   sp_fault_od_critical: number | null;
   sp_fault_od_minor: number | null;
   sp_fault_ifc_critical: number | null;
@@ -91,6 +99,13 @@ export const EMPTY_SKYPORT: SkyportFields = {
   sp_zone1_damper: null,
   sp_aq_outdoor_ozone: null,
   sp_aq_outdoor_particles: null,
+  sp_dehum_demand_pct: null,
+  sp_alg_dehum_demand: null,
+  sp_alg_overcool_demand: null,
+  sp_alg_cool_demand: null,
+  sp_requested_airflow: null,
+  sp_fan_actual_pct: null,
+  sp_compressor_reduction: null,
   sp_fault_od_critical: null,
   sp_fault_od_minor: null,
   sp_fault_ifc_critical: null,
@@ -165,6 +180,20 @@ export function skyportFields(d: SkyportDeviceData): SkyportFields {
     sp_aq_outdoor_ozone: plain(d.aqOutdoorOzone),
     // outdoor particulates, ug/m3
     sp_aq_outdoor_particles: plain(d.aqOutdoorParticles),
+    // outdoor dehum demand, %
+    sp_dehum_demand_pct: halfPercent(d.ctOutdoorDeHumidificationRequestedDemand),
+    // control algorithm dehum demand, %
+    sp_alg_dehum_demand: halfPercent(d.ctControlAlgorithmDehumDemand),
+    // overcool-to-dehumidify demand, %
+    sp_alg_overcool_demand: halfPercent(d.ctControlAlgorithmOvercoolDemand),
+    // control algorithm cool demand, %; context for the dehum figures
+    sp_alg_cool_demand: halfPercent(d.ctControlAlgorithmCoolDemand),
+    // commanded indoor CFM; compare against sp_indoor_airflow
+    sp_requested_airflow: plain(d.ctOutdoorRequestedIndoorAirflow),
+    // actual indoor fan output, %
+    sp_fan_actual_pct: halfPercent(d.ctIFCCurrentFanActualStatus),
+    // compressor reduction mode, enum
+    sp_compressor_reduction: plain(d.ctOutdoorCompressorReductionMode),
     // 0 = none
     sp_fault_od_critical: plain(d.ctOutdoorCriticalFault),
     // 0 = none
@@ -213,6 +242,13 @@ export const SKYPORT_COLUMNS: readonly (keyof SkyportFields)[] = [
   'sp_zone1_damper',
   'sp_aq_outdoor_ozone',
   'sp_aq_outdoor_particles',
+  'sp_dehum_demand_pct',
+  'sp_alg_dehum_demand',
+  'sp_alg_overcool_demand',
+  'sp_alg_cool_demand',
+  'sp_requested_airflow',
+  'sp_fan_actual_pct',
+  'sp_compressor_reduction',
   'sp_fault_od_critical',
   'sp_fault_od_minor',
   'sp_fault_ifc_critical',

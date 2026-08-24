@@ -9,13 +9,7 @@ CREATE TABLE IF NOT EXISTS devices (
   channel_base     INTEGER NOT NULL UNIQUE,
   first_seen       INTEGER NOT NULL,
   last_seen        INTEGER NOT NULL,
-  sp_tonnage               REAL,
-  sp_cooling_rated_power   REAL,
-  sp_heating_rated_power   REAL,
-  sp_od_unit_type          REAL,
-  sp_ifc_unit_type         REAL,
   sp_stat_model            TEXT,
-  sp_compressor_min_on     REAL,
   sp_compressor_min_off    REAL
 );
 
@@ -68,6 +62,13 @@ CREATE TABLE IF NOT EXISTS readings (
   sp_zone1_damper          REAL,
   sp_aq_outdoor_ozone      REAL,
   sp_aq_outdoor_particles  REAL,
+  sp_dehum_demand_pct      REAL,
+  sp_alg_dehum_demand      REAL,
+  sp_alg_overcool_demand   REAL,
+  sp_alg_cool_demand       REAL,
+  sp_requested_airflow     REAL,
+  sp_fan_actual_pct        REAL,
+  sp_compressor_reduction  REAL,
   sp_fault_od_critical     REAL,
   sp_fault_od_minor        REAL,
   sp_fault_ifc_critical    REAL,

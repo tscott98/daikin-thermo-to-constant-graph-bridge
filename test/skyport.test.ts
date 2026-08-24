@@ -19,6 +19,12 @@ const PROBE = {
   overcoolAmount: 1.1,
   dehumSP: 50,
   ctOutdoorCriticalFault: 0,
+  ctOutdoorDeHumidificationRequestedDemand: 0,
+  ctControlAlgorithmDehumDemand: 200,
+  ctControlAlgorithmOvercoolDemand: 200,
+  ctOutdoorRequestedIndoorAirflow: 630,
+  ctIFCCurrentFanActualStatus: 72,
+  ctOutdoorCompressorReductionMode: 1,
 };
 
 describe('sentinel handling', () => {
@@ -95,5 +101,28 @@ describe('skyportFields', () => {
   it('exports one column name per mapped field', () => {
     expect(SKYPORT_COLUMNS).toHaveLength(Object.keys(EMPTY_SKYPORT).length);
     expect(new Set(SKYPORT_COLUMNS).size).toBe(SKYPORT_COLUMNS.length);
+  });
+});
+
+describe('dehumidification chain', () => {
+  it('maps the fields that answer whether dehum is ever requested', () => {
+    const f = skyportFields(PROBE);
+    // Zero here is the finding, not a missing value: it means the equipment
+    // never asked for dehumidification, which no airflow tuning can fix.
+    expect(f.sp_dehum_demand_pct).toBe(0);
+    expect(f.sp_alg_dehum_demand).toBe(100);
+    expect(f.sp_alg_overcool_demand).toBe(100);
+  });
+
+  it('keeps commanded airflow separate from actual', () => {
+    const f = skyportFields(PROBE);
+    expect(f.sp_requested_airflow).toBe(630);
+    expect(f.sp_indoor_airflow).toBe(633);
+  });
+
+  it('scales fan output but not the discrete reduction mode', () => {
+    const f = skyportFields(PROBE);
+    expect(f.sp_fan_actual_pct).toBe(36);
+    expect(f.sp_compressor_reduction).toBe(1);
   });
 });

@@ -115,6 +115,13 @@ function rowToReading(r: Row): Reading {
     sp_zone1_damper: asNum(r['sp_zone1_damper']),
     sp_aq_outdoor_ozone: asNum(r['sp_aq_outdoor_ozone']),
     sp_aq_outdoor_particles: asNum(r['sp_aq_outdoor_particles']),
+    sp_dehum_demand_pct: asNum(r['sp_dehum_demand_pct']),
+    sp_alg_dehum_demand: asNum(r['sp_alg_dehum_demand']),
+    sp_alg_overcool_demand: asNum(r['sp_alg_overcool_demand']),
+    sp_alg_cool_demand: asNum(r['sp_alg_cool_demand']),
+    sp_requested_airflow: asNum(r['sp_requested_airflow']),
+    sp_fan_actual_pct: asNum(r['sp_fan_actual_pct']),
+    sp_compressor_reduction: asNum(r['sp_compressor_reduction']),
     sp_fault_od_critical: asNum(r['sp_fault_od_critical']),
     sp_fault_od_minor: asNum(r['sp_fault_od_minor']),
     sp_fault_ifc_critical: asNum(r['sp_fault_ifc_critical']),
@@ -189,10 +196,12 @@ export async function insertReadings(db: Db, rows: Reading[]): Promise<number> {
       sp_inverter_fin_temp, sp_eev_superheat, sp_eev_suction_temp, sp_eev_liquid_temp,
       sp_reversing_valve, sp_od_air_temp, sp_hum_setpoint, sp_dehum_setpoint,
       sp_overcool_amount, sp_zone1_damper, sp_aq_outdoor_ozone, sp_aq_outdoor_particles,
-      sp_fault_od_critical, sp_fault_od_minor, sp_fault_ifc_critical, sp_fault_ifc_minor,
-      sp_fault_stat_critical, sp_fault_stat_minor,
+      sp_dehum_demand_pct, sp_alg_dehum_demand, sp_alg_overcool_demand, sp_alg_cool_demand,
+      sp_requested_airflow, sp_fan_actual_pct, sp_compressor_reduction, sp_fault_od_critical,
+      sp_fault_od_minor, sp_fault_ifc_critical, sp_fault_ifc_minor, sp_fault_stat_critical,
+      sp_fault_stat_minor,
       raw, published
-    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,0)`;
+    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,0)`;
 
   const statements: InStatement[] = rows.map((r) => ({
     sql,
@@ -210,8 +219,10 @@ export async function insertReadings(db: Db, rows: Reading[]): Promise<number> {
       r.sp_inverter_fin_temp, r.sp_eev_superheat, r.sp_eev_suction_temp, r.sp_eev_liquid_temp,
       r.sp_reversing_valve, r.sp_od_air_temp, r.sp_hum_setpoint, r.sp_dehum_setpoint,
       r.sp_overcool_amount, r.sp_zone1_damper, r.sp_aq_outdoor_ozone, r.sp_aq_outdoor_particles,
-      r.sp_fault_od_critical, r.sp_fault_od_minor, r.sp_fault_ifc_critical, r.sp_fault_ifc_minor,
-      r.sp_fault_stat_critical, r.sp_fault_stat_minor,
+      r.sp_dehum_demand_pct, r.sp_alg_dehum_demand, r.sp_alg_overcool_demand, r.sp_alg_cool_demand,
+      r.sp_requested_airflow, r.sp_fan_actual_pct, r.sp_compressor_reduction, r.sp_fault_od_critical,
+      r.sp_fault_od_minor, r.sp_fault_ifc_critical, r.sp_fault_ifc_minor, r.sp_fault_stat_critical,
+      r.sp_fault_stat_minor,
       r.raw,
     ],
   }));
@@ -382,6 +393,8 @@ export interface SeriesOptions {
 const SKYPORT_MAX_COLUMNS = new Set<string>([
   'sp_compressor_runtime',
   'sp_reversing_valve',
+  // Discrete mode, not a level -- averaging it would invent states.
+  'sp_compressor_reduction',
   'sp_fault_od_critical',
   'sp_fault_od_minor',
   'sp_fault_ifc_critical',
