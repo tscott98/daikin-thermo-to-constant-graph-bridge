@@ -7,3 +7,6 @@ dist/
 
 # Downloaded API docs kept locally for reference; not part of the source.
 reference/
+
+# Raw Grafana exports; the curated copy is grafana/dashboard.json
+grafana/Daikin One thermostat-*.json
