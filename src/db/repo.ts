@@ -362,6 +362,10 @@ export interface SeriesOptions {
   bucketSec: number;
   deviceId?: string | undefined;
   limit: number;
+  /** Currency per kWh. 0 omits the cost column. */
+  ratePerKwh?: number | undefined;
+  /** Seconds each sample represents, for the energy integral. */
+  sampleIntervalSec?: number | undefined;
 }
 
 /**
@@ -455,8 +459,31 @@ export function skyportSelectClause(): string {
  *
  * bucketSec = 1 collapses to raw rows, since (ts / 1) * 1 = ts.
  */
+/**
+ * Energy and cost for a bucket.
+ *
+ * Hours come from the sample count, not the bucket width. That distinction
+ * matters: if collection drops out for half an hour, a width-based integral
+ * would bill that gap as though the system had been running at the average of
+ * whatever samples did arrive. Counting samples means a gap contributes nothing,
+ * which understates rather than invents consumption.
+ *
+ * Only the outdoor unit is counted. sp_indoor_power has an unresolved scale, so
+ * including it would add a confident-looking number of unknown magnitude to
+ * every cost figure. The blower is genuinely missing from these totals.
+ */
+function energyClause(sampleSec: number, rate: number): string {
+  const hours = `(COUNT(sp_outdoor_power) * ${sampleSec} / 3600.0)`;
+  const kwh = `ROUND(AVG(sp_outdoor_power) * ${hours} / 1000.0, 4)`;
+  const cost = rate > 0 ? `ROUND(${kwh} * ${rate}, 4)` : 'NULL';
+  return `${kwh} AS energy_kwh,
+            ${cost} AS cost`;
+}
+
 export async function getSeries(db: Db, o: SeriesOptions): Promise<Row[]> {
   const bucket = Math.max(1, Math.floor(o.bucketSec));
+  const sampleSec = Math.max(1, Math.floor(o.sampleIntervalSec ?? 300));
+  const rate = Number.isFinite(o.ratePerKwh) && (o.ratePerKwh ?? 0) > 0 ? (o.ratePerKwh as number) : 0;
   const where = ['ts >= ?', 'ts <= ?'];
 
   // Placeholders bind by position in the statement text, not by logical order,
@@ -491,7 +518,8 @@ export async function getSeries(db: Db, o: SeriesOptions): Promise<Row[]> {
                                                                     AS pct_running,
             ${skyportSelectClause()},
             MAX(sp_compressor_runtime) - LAG(MAX(sp_compressor_runtime))
-              OVER (PARTITION BY device_id ORDER BY (ts / ?))  AS compressor_runtime_delta
+              OVER (PARTITION BY device_id ORDER BY (ts / ?))  AS compressor_runtime_delta,
+            ${energyClause(sampleSec, rate)}
           FROM readings
           WHERE ${where.join(' AND ')}
           GROUP BY device_id, (ts / ?)

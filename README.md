@@ -266,9 +266,16 @@ rather than a meaningless fraction, fault codes take the maximum so a fault anyw
 bucket is not averaged away, and `sp_compressor_runtime` — a cumulative counter, not a level —
 takes the maximum so a client can difference it between buckets for exact runtime.
 
+`energy_kwh` and `cost` are derived per bucket. Energy integrates from the *sample count*, not
+the bucket width, so a gap in collection contributes nothing rather than being billed at whatever
+the surrounding samples averaged. Cost multiplies that by `RATE_PER_KWH`, or by a `rate` query
+parameter if one is supplied. Both cover the **outdoor unit only** — `sp_indoor_power` has an
+unverified scale, so including the blower would add a confident-looking number of unknown
+magnitude to every total.
+
 Query parameters: `from`, `to` (epoch seconds or milliseconds), `interval` (bucket size in
-seconds or milliseconds, omit for raw 5-minute rows), `device`, `limit` (max 20,000), and
-`format=csv`.
+seconds or milliseconds, omit for raw 5-minute rows), `device`, `limit` (max 20,000), `rate`
+(overrides `RATE_PER_KWH`), and `format=csv`.
 
 **If a panel is empty rather than erroring,** check the time range first: `from`/`to` accept both
 units, so passing seconds where Grafana would have sent milliseconds silently queries a window
@@ -305,6 +312,7 @@ Vars live in `wrangler.toml`. Secrets are set with `wrangler secret put`.
 | `PUBLISH_BATCH` | `200` | Max rows published per run. Bounds payload size when draining a backlog. |
 | `RAW_RETENTION_DAYS` | `30` | Days to keep raw JSON. `0` disables raw capture entirely. |
 | `DRY_RUN` | `false` | Capture to Turso but send nothing to ConstantGraph. |
+| `RATE_PER_KWH` | `0.14` | Electricity price for the `cost` column. `0` disables costing. |
 
 ## Free-tier headroom
 

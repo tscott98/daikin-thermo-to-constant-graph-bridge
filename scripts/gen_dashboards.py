@@ -136,6 +136,33 @@ ENERGY = [
                 "tooltip": {"mode": "single"}},
           custom={"show": "points", "pointSize": {"fixed": 5}}),
 
+    panel(6, "Energy and cost per day",
+          [("energy_kwh", "kWh"), ("cost", "Cost")],
+          {"h": 8, "w": 16, "x": 0, "y": 25}, unit="kwatth",
+          desc="Set the panel interval to 1d. Energy is integrated from the "
+               "sample count rather than the bucket width, so a gap in "
+               "collection contributes nothing instead of being billed at the "
+               "average rate. Outdoor unit only -- the blower is not included, "
+               "because its power reading has an unverified scale.",
+          overrides=[
+              color("kWh", "yellow"),
+              {"matcher": {"id": "byName", "options": "Cost"},
+               "properties": [{"id": "unit", "value": "currencyUSD"},
+                              {"id": "color", "value": {"mode": "fixed", "fixedColor": "green"}},
+                              {"id": "custom.axisPlacement", "value": "right"}]},
+              {"matcher": {"id": "byRegexp", "options": ".*"},
+               "properties": [{"id": "custom.drawStyle", "value": "bars"},
+                              {"id": "custom.fillOpacity", "value": 60}]},
+          ]),
+
+    panel(7, "Cost for selected range", [("cost", "Cost")],
+          {"h": 8, "w": 8, "x": 16, "y": 25}, unit="currencyUSD", ptype="stat",
+          desc="Sum of per-bucket cost across the dashboard time range, at the "
+               "rate configured in RATE_PER_KWH. Outdoor unit only.",
+          opts={**STAT_OPTS,
+                "reduceOptions": {"calcs": ["sum"], "fields": "", "values": False},
+                "colorMode": "value"}),
+
     panel(5, "Compressor speed and demand",
           [("sp_compressor_rps", "Actual RPS"), ("sp_target_compressor_rps", "Target RPS"),
            ("sp_frequency_pct", "Frequency %")],

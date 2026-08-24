@@ -148,7 +148,14 @@ async function route(request: Request, env: Env): Promise<Response> {
     const opts = parseSeriesQuery(url.searchParams, Math.floor(Date.now() / 1000));
 
     const db = createDb(env);
-    const rows = await getSeries(db, opts);
+    // Rate falls back to the configured default so cost panels work without
+    // every dashboard URL having to carry it.
+    const settings = settingsFrom(env);
+    const rows = await getSeries(db, {
+      ...opts,
+      ratePerKwh: opts.ratePerKwh > 0 ? opts.ratePerKwh : settings.ratePerKwh,
+      sampleIntervalSec: settings.pollIntervalMin * 60,
+    });
 
     const out = rows.map((r) => {
       const ts = Number(r['ts']);

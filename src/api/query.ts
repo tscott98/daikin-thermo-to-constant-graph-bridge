@@ -14,9 +14,20 @@ export interface SeriesQuery {
   deviceId: string | undefined;
   limit: number;
   csv: boolean;
+  /** Electricity price in currency units per kWh; 0 disables the cost column. */
+  ratePerKwh: number;
 }
 
 export const MAX_SERIES_ROWS = 20_000;
+
+/**
+ * Sanity ceiling on the electricity rate.
+ *
+ * Guards against a misplaced decimal or cents-instead-of-dollars turning every
+ * cost figure into nonsense. US residential rates sit around 0.10-0.40; 100 is
+ * far outside any plausible per-kWh price in any currency worth charting.
+ */
+export const MAX_RATE_PER_KWH = 100;
 const DEFAULT_LIMIT = 5_000;
 
 /**
@@ -44,6 +55,14 @@ export function toBucketSeconds(raw: string | null): number {
   return n > 10_000 ? Math.max(1, Math.floor(n / 1000)) : Math.max(1, Math.floor(n));
 }
 
+/** Absent, unparseable, negative, or implausible rates all disable costing. */
+export function toRate(raw: string | null): number {
+  const n = Number(raw);
+  if (raw === null || raw === '' || !Number.isFinite(n)) return 0;
+  if (n < 0 || n > MAX_RATE_PER_KWH) return 0;
+  return n;
+}
+
 export function parseSeriesQuery(q: URLSearchParams, nowSec: number): SeriesQuery {
   const fromTs = toEpochSeconds(q.get('from'), nowSec - 24 * 60 * 60);
   const toTs = toEpochSeconds(q.get('to'), nowSec);
@@ -61,5 +80,6 @@ export function parseSeriesQuery(q: URLSearchParams, nowSec: number): SeriesQuer
     deviceId: q.get('device') ?? undefined,
     limit,
     csv: q.get('format') === 'csv',
+    ratePerKwh: toRate(q.get('rate')),
   };
 }

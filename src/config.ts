@@ -19,6 +19,7 @@ export interface Env {
   PUBLISH_BATCH: string;
   RAW_RETENTION_DAYS: string;
   DRY_RUN: string;
+  RATE_PER_KWH: string;
   CG_APP_NAME: string;
 
   // secrets
@@ -155,6 +156,11 @@ export function channelIdFor(channelBase: number, metric: MetricKey): number {
   return channelBase + CHANNEL_OFFSET[metric];
 }
 
+function floatVar(raw: string | undefined, fallback: number): number {
+  const n = Number.parseFloat(raw ?? '');
+  return Number.isFinite(n) && n >= 0 ? n : fallback;
+}
+
 function intVar(raw: string | undefined, fallback: number): number {
   const n = Number.parseInt(raw ?? '', 10);
   return Number.isFinite(n) ? n : fallback;
@@ -166,6 +172,8 @@ export interface Settings {
   publishBatch: number;
   rawRetentionDays: number;
   dryRun: boolean;
+  /** Electricity price per kWh used for cost columns; 0 disables them. */
+  ratePerKwh: number;
   appName: string;
 }
 
@@ -176,6 +184,7 @@ export function settingsFrom(env: Env): Settings {
     publishBatch: intVar(env.PUBLISH_BATCH, 200),
     rawRetentionDays: intVar(env.RAW_RETENTION_DAYS, 30),
     dryRun: String(env.DRY_RUN).toLowerCase() === 'true',
+    ratePerKwh: floatVar(env.RATE_PER_KWH, 0),
     appName: env.CG_APP_NAME || 'daikin-one-bridge',
   };
 }

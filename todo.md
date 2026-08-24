@@ -156,8 +156,9 @@ and Refrigeration dashboards.
 - Import the two new dashboards and confirm they render (all columns verified
   present in the API response, but not yet viewed in Grafana).
 - Import or hand-build the alert rules.
-- Electricity rate for cost panels — the Energy dashboard currently charts watts
-  and hours but no dollars, pending a $/kWh figure.
+- ~~Electricity rate~~ — set to $0.14/kWh via `RATE_PER_KWH` in `wrangler.toml`,
+  overridable per-request with `?rate=`. Energy dashboard now has kWh/cost per
+  day and a range-total cost stat. Covers the outdoor unit only.
 - `sp_eev_superheat`, `sp_inverter_fin_temp`, `sp_indoor_power` remain
   uncalibrated. Superheat is charted raw because its *trend* is meaningful even
   when its scale is not; the other two are not charted at all.

@@ -1,9 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import {
+  MAX_RATE_PER_KWH,
   MAX_SERIES_ROWS,
   parseSeriesQuery,
   toBucketSeconds,
   toEpochSeconds,
+  toRate,
 } from '../src/api/query';
 
 const NOW = 1_787_529_300;
@@ -82,5 +84,31 @@ describe('parseSeriesQuery', () => {
   it('detects csv', () => {
     expect(parseSeriesQuery(q('format=csv'), NOW).csv).toBe(true);
     expect(parseSeriesQuery(q('format=json'), NOW).csv).toBe(false);
+  });
+});
+
+describe('toRate', () => {
+  it('accepts a normal residential rate', () => {
+    expect(toRate('0.14')).toBe(0.14);
+    expect(toRate('0.3891')).toBe(0.3891);
+  });
+
+  it('treats absent or unparseable input as no costing', () => {
+    expect(toRate(null)).toBe(0);
+    expect(toRate('')).toBe(0);
+    expect(toRate('free')).toBe(0);
+  });
+
+  it('rejects negative and implausible rates rather than charting nonsense', () => {
+    // A rate entered in cents instead of dollars would make every cost figure
+    // wrong by 100x while still looking like a number.
+    expect(toRate('-0.14')).toBe(0);
+    expect(toRate('1000')).toBe(0);
+    expect(toRate(String(MAX_RATE_PER_KWH + 1))).toBe(0);
+  });
+
+  it('is wired into parseSeriesQuery', () => {
+    expect(parseSeriesQuery(new URLSearchParams('rate=0.14'), 0).ratePerKwh).toBe(0.14);
+    expect(parseSeriesQuery(new URLSearchParams(''), 0).ratePerKwh).toBe(0);
   });
 });
