@@ -185,6 +185,44 @@ an ID from `/api/stats`.
 | Indoor − Outdoor delta | How hard the envelope is working |
 | Efficiency curve | Percent running against outdoor temperature, hourly buckets, XY chart |
 
+### The other dashboards
+
+Three dashboards, split by the question being asked and how often — not by which
+sensor the data came from.
+
+| File | Question | Cadence |
+|---|---|---|
+| [`dashboard.json`](grafana/dashboard.json) | Is the house comfortable and the system behaving? | Ambient, several times a day |
+| [`dashboard-energy.json`](grafana/dashboard-energy.json) | What is this costing, and is it performing? | Monthly, or when a bill surprises |
+| [`dashboard-health.json`](grafana/dashboard-health.json) | Is anything wrong, or slowly getting worse? | Rarely by choice — usually because an alert fired |
+
+Energy & Efficiency defaults to 30 days, because a single day says nothing about
+cost. Its two scatter panels pin the interval to hourly rather than following the
+panel resolution, which keeps the point cloud readable at any time range. The
+compressor-hours panel wants a **1-day** interval: the underlying counter only
+ticks once per accumulated hour, so at five minutes it reads mostly zero.
+
+System Health leads with the six fault codes as stat panels — green at zero, red
+otherwise — because that is the question the dashboard exists to answer. It also
+carries a samples-per-bucket panel, which is the only thing that distinguishes
+"the system is idle" from "collection broke"; without it a dead poller and a
+quiet house look identical on every other chart.
+
+### Alerting
+
+[`grafana/alerting/daikin-alerts.yaml`](grafana/alerting/daikin-alerts.yaml) has
+two rules: collection stalling, and any non-zero equipment fault. A dashboard you
+have to remember to open is a poor way to notice failure, so this is the only
+push mechanism in the system and worth setting up even if you skip the charts.
+
+The collection rule queries `/health`, which is unauthenticated — so it keeps
+working if you rotate the read key. Its threshold is 600 seconds, two missed
+cron cycles, because one missed cycle is ordinary jitter and should not page.
+
+That file is **untested against a live Grafana**; provisioning schemas move
+between versions. If the import fails, build the two rules through the UI — the
+thresholds and the reasoning are the part worth keeping, not the YAML.
+
 **To build panels by hand instead,** query type JSON, source URL, parser **Backend**, format
 **Time Series**:
 
@@ -209,6 +247,17 @@ on that crossing ~600 tells you collection has stopped. That is the one alert wo
 Skyport metrics (see below): all 38 `sp_*` columns from `readings`, aggregated by bucket. Most
 average; `sp_compressor_runtime` and the six `sp_fault_*` columns take the bucket maximum
 instead, for the reasons in the next paragraph.
+
+Units are carried in the column name. Temperatures the equipment reports in tenths of a degree
+are served as `_f` (`sp_discharge_temp_f`), currents in deciamps as `_a`, and three columns whose
+scale could not be established from the data are served unconverted with a `_raw` suffix
+(`sp_eev_superheat_raw`, `sp_inverter_fin_temp_raw`, `sp_indoor_power_raw`) rather than given a
+plausible-looking conversion that might be wrong.
+
+`compressor_runtime_delta` is derived, not stored: the equipment's cumulative compressor-hour
+counter differenced against the previous bucket. It increments by exactly 1 per hour of
+compressor operation, so it is exact at hourly or daily buckets and mostly zero at five-minute
+ones. Use it for runtime totals, not for fine-grained cycling.
 
 Aggregation is per metric rather than a blanket average, which matters once a panel spans more
 than a few days: sensor readings average, runtime minutes sum so a daily bucket reports real

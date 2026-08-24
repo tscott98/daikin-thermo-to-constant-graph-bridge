@@ -1,0 +1,128 @@
+# Grafana unified alerting rules for the Daikin bridge.
+#
+# Import: Alerting -> Alert rules -> New alert rule -> Import, or drop this file
+# into Grafana's provisioning/alerting/ directory on a self-hosted instance.
+#
+# NOT VERIFIED against a live Grafana. Provisioning schemas shift between
+# versions, and this was written without an instance to import it into. If it
+# fails to import, build the two rules by hand -- they are about six clicks
+# each, and the thresholds and reasoning below are the part worth keeping.
+#
+# Replace DS_INFINITY_UID with your Infinity data source UID
+# (Connections -> Data sources -> your Infinity source -> the UID in the URL).
+
+apiVersion: 1
+
+groups:
+  - orgId: 1
+    name: daikin-bridge
+    folder: Daikin
+    interval: 5m
+    rules:
+      # The single most important alert in the system. Everything else assumes
+      # data is arriving; this is the only thing that notices when it stops.
+      #
+      # /health is unauthenticated and returns only counts, so no API key is
+      # needed here -- which also means this rule keeps working if the read key
+      # is ever rotated.
+      #
+      # Threshold: the cron runs every 5 minutes, so 600s is two missed cycles.
+      # One missed cycle is normal jitter and must not page.
+      - uid: daikin-collection-stalled
+        title: Daikin bridge has stopped collecting
+        condition: threshold
+        for: 10m
+        annotations:
+          summary: No thermostat reading for over 10 minutes
+          description: >-
+            seconds_since_last_reading exceeded 600. The Worker cron may have
+            failed, Turso may be unreachable, or the Daikin integrator
+            credentials may have expired. Check /health, then wrangler tail.
+        labels:
+          severity: critical
+        noDataState: Alerting
+        execErrState: Alerting
+        data:
+          - refId: health
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: DS_INFINITY_UID
+            model:
+              refId: health
+              type: json
+              source: url
+              parser: backend
+              format: table
+              url: health
+              url_options: { method: GET }
+              root_selector: ""
+              columns:
+                - selector: seconds_since_last_reading
+                  text: stale_seconds
+                  type: number
+          - refId: threshold
+            datasourceUid: __expr__
+            model:
+              refId: threshold
+              type: threshold
+              expression: health
+              conditions:
+                - evaluator: { type: gt, params: [600] }
+
+      # Equipment faults. Separate from the collection alert because the
+      # response is different: this one means call a technician, not debug a
+      # Worker. Fault codes are 0 when healthy, so any positive value fires.
+      - uid: daikin-equipment-fault
+        title: Daikin equipment reporting a fault
+        condition: threshold
+        for: 5m
+        annotations:
+          summary: A non-zero fault code is being reported
+          description: >-
+            One of the outdoor, indoor, or thermostat fault codes is non-zero.
+            Open the System Health & Diagnostics dashboard to see which, and
+            check the refrigerant circuit panel for context.
+        labels:
+          severity: warning
+        noDataState: OK
+        execErrState: OK
+        data:
+          - refId: faults
+            relativeTimeRange: { from: 3600, to: 0 }
+            datasourceUid: DS_INFINITY_UID
+            model:
+              refId: faults
+              type: json
+              source: url
+              parser: backend
+              format: table
+              url: api/series?from=$__from&to=$__to&interval=3600
+              url_options: { method: GET }
+              root_selector: ""
+              columns:
+                - selector: sp_fault_od_critical
+                  text: od_critical
+                  type: number
+                - selector: sp_fault_od_minor
+                  text: od_minor
+                  type: number
+                - selector: sp_fault_ifc_critical
+                  text: ifc_critical
+                  type: number
+                - selector: sp_fault_stat_critical
+                  text: stat_critical
+                  type: number
+          - refId: reduce
+            datasourceUid: __expr__
+            model:
+              refId: reduce
+              type: reduce
+              expression: faults
+              reducer: max
+          - refId: threshold
+            datasourceUid: __expr__
+            model:
+              refId: threshold
+              type: threshold
+              expression: reduce
+              conditions:
+                - evaluator: { type: gt, params: [0] }

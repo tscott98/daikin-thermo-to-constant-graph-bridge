@@ -386,12 +386,61 @@ const SKYPORT_MAX_COLUMNS = new Set<string>([
   'sp_fault_stat_minor',
 ]);
 
+/**
+ * Columns the equipment reports in tenths of a degree Fahrenheit.
+ *
+ * Calibrated against live data rather than assumed: sp_od_air_temp ranged
+ * 763-891 over a window when the integrator API's outdoor temperature ranged
+ * 75.2-84.2 F. Dividing by ten makes them coincide, which fixes the scale for
+ * the whole family -- and every other member then lands in a plausible range
+ * (suction 38.9-76.8 F, discharge 102.5-150.6 F).
+ *
+ * Served as degrees F so a chart axis reads as a temperature, not as 1630.
+ */
+const SKYPORT_TENTHS_F = new Set<string>([
+  'sp_od_air_temp',
+  'sp_suction_temp',
+  'sp_discharge_temp',
+  'sp_od_coil_temp',
+  'sp_od_liquid_temp',
+  'sp_eev_suction_temp',
+  'sp_eev_liquid_temp',
+]);
+
+/** Currents reported in deciamps; 0-93 becomes a believable 0-9.3 A. */
+const SKYPORT_DECIAMPS = new Set<string>([
+  'sp_compressor_current',
+  'sp_inverter_current',
+  'sp_od_fan_current',
+]);
+
+/**
+ * Columns whose scale is still unresolved, exposed with a _raw suffix.
+ *
+ * sp_eev_superheat reads 271-846, which as tenths F would be 27-85 degrees of
+ * superheat against a normal 8-15. sp_inverter_fin_temp sits in an implausibly
+ * narrow 5.5-8.5. sp_indoor_power never drops below 842 even with the system
+ * idle. Each could be given a conversion that makes the number look reasonable,
+ * and each would then be confidently wrong -- the same failure as the 255
+ * sentinel and the equipment-status enum. Renaming makes the uncertainty
+ * visible at the point of use, in the chart legend.
+ */
+const SKYPORT_UNCALIBRATED = new Set<string>([
+  'sp_eev_superheat',
+  'sp_inverter_fin_temp',
+  'sp_indoor_power',
+]);
+
 export function skyportSelectClause(): string {
-  return SKYPORT_COLUMNS.map((c) =>
-    SKYPORT_MAX_COLUMNS.has(c)
-      ? `MAX(${c}) AS ${c}`
-      : `ROUND(AVG(${c}), 2) AS ${c}`,
-  ).join(',\n            ');
+  return SKYPORT_COLUMNS.map((c) => {
+    if (SKYPORT_MAX_COLUMNS.has(c)) return `MAX(${c}) AS ${c}`;
+    // Suffixes carry the unit into the column name, so a Grafana legend says
+    // what it is showing without the reader consulting this file.
+    if (SKYPORT_UNCALIBRATED.has(c)) return `ROUND(AVG(${c}), 2) AS ${c}_raw`;
+    if (SKYPORT_TENTHS_F.has(c)) return `ROUND(AVG(${c}) / 10.0, 1) AS ${c}_f`;
+    if (SKYPORT_DECIAMPS.has(c)) return `ROUND(AVG(${c}) / 10.0, 2) AS ${c}_a`;
+    return `ROUND(AVG(${c}), 2) AS ${c}`;
+  }).join(',\n            ');
 }
 
 /**
@@ -409,7 +458,12 @@ export function skyportSelectClause(): string {
 export async function getSeries(db: Db, o: SeriesOptions): Promise<Row[]> {
   const bucket = Math.max(1, Math.floor(o.bucketSec));
   const where = ['ts >= ?', 'ts <= ?'];
-  const args: Array<string | number> = [bucket, bucket, o.fromTs, o.toTs];
+
+  // Placeholders bind by position in the statement text, not by logical order,
+  // so these must follow the order the ? marks appear when reading the SQL top
+  // to bottom: the two bucket divisions in the SELECT list, the bucket inside
+  // the window's ORDER BY, then the WHERE terms, then GROUP BY and LIMIT.
+  const args: Array<string | number> = [bucket, bucket, bucket, o.fromTs, o.toTs];
 
   if (o.deviceId) {
     where.push('device_id = ?');
@@ -435,7 +489,9 @@ export async function getSeries(db: Db, o: SeriesOptions): Promise<Row[]> {
             SUM(CASE WHEN equipment_status IN (1, 2)      THEN 5 ELSE 0 END) AS runtime_cool_min,
             ROUND(AVG(CASE WHEN equipment_status IN (1,2,3) THEN 1.0 ELSE 0.0 END) * 100, 1)
                                                                     AS pct_running,
-            ${skyportSelectClause()}
+            ${skyportSelectClause()},
+            MAX(sp_compressor_runtime) - LAG(MAX(sp_compressor_runtime))
+              OVER (PARTITION BY device_id ORDER BY (ts / ?))  AS compressor_runtime_delta
           FROM readings
           WHERE ${where.join(' AND ')}
           GROUP BY device_id, (ts / ?)

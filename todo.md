@@ -1,106 +1,163 @@
-# Dashboard expansion — plan for next session
+# Dashboard expansion — plan
 
-Context: `/api/series` now exposes all 38 Skyport (`sp_*`) columns alongside the
-original integrator-API metrics. This is the plan for what to build on top of
-that data. Written by Sonnet while Tim was AFK; pick up here.
+`/api/series` exposes all 38 Skyport (`sp_*`) columns. This is the plan for what
+to build on top of that data.
 
-## State when this was written
+## State
 
-- The `/api/series` Skyport expansion is **committed and tested** (72 tests,
-  typecheck clean), but **not yet deployed** — run `npx wrangler deploy` before
-  building any dashboard against the `sp_*` columns, or Grafana will query a
-  Worker that does not return them yet.
-- The generated SQL was validated against the live Turso schema: all 38 `sp_*`
-  columns project correctly, and recent buckets carry real values.
-- `getSeries()` in `src/db/repo.ts` aggregates every `sp_*` column: most by
-  `AVG`, but `sp_compressor_runtime` and the six `sp_fault_*` columns by `MAX`
-  (see the comment on `SKYPORT_MAX_COLUMNS` for why).
-- ConstantGraph publishing is unchanged — this expansion is Grafana/`/api/series`
-  only, per Tim's instruction.
-- Existing dashboards (`grafana/dashboard.json` classic, `grafana/dashboard-v2.json`)
-  are untouched and still just cover Comfort/Duty cycle/Runtime/Humidity/Delta/
-  Efficiency curve.
+- `/api/series` Skyport expansion is committed and **deployed** (`5d97cd1c`).
+- Migration 0003 has run; `sp_*` columns are populating on every 5-minute cycle.
+- ConstantGraph publishing is unchanged and stays that way.
+- Existing dashboards (`grafana/dashboard.json`, `grafana/dashboard-v2.json`)
+  cover Comfort / Duty cycle / Runtime / Humidity / Delta / Efficiency curve.
 
-## Proposed dashboards, grouped by use case (not by data type)
+## Product review — what changed from the first draft
 
-Tim's instruction was explicit: group by *who's looking and why*, not by
-sensor category. Priority order below is a recommendation, not a mandate —
-confirm with Tim before building all of them.
+The first draft proposed six dashboards grouped by "audience". That was wrong in
+three ways, corrected here:
 
-### 1. Daily Comfort — exists, no changes needed
+**The audience is always one person.** Grouping by audience produced six
+near-identical labels. The real differentiator is *cadence and decision*: what
+question is being asked, how often, and what action follows. Regrouped on that.
 
-### 2. System Health & Alerting — build first
-Audience: Tim, wanting to know if something's broken before the house gets warm.
-- Single-stat panels for all 6 `sp_fault_*` columns — green at 0, red otherwise
-- A Grafana **alert rule** (not just a panel) on `/health`'s
-  `seconds_since_last_reading` crossing ~600s
-- Skyport enrichment rate — consider whether `attempted`/`enriched` from
-  `/admin/poll` needs to be persisted somewhere queryable, since right now
-  it's only visible in the response of a manual poll, not stored per-cycle
-- Any comms/signal fields, if they turn out to be populated on this unit
+**Six dashboards is sprawl.** Nobody maintains six dashboards for their own
+house. Two of the six overlapped almost entirely (Energy & Cost and Performance
+Curve are both "efficiency versus outdoor temperature"), and Weekly Summary was
+the same data at a different time range — which is a time-picker, not a
+dashboard. Consolidated to **three**.
 
-This is the one dashboard that should ship with a real alert, not just charts —
-silent failure is the main risk in an unattended bridge.
+**Fault detection was framed as a dashboard.** A dashboard you must remember to
+open is a failed design for detecting failure. The only thing that actually
+works is a push alert. Promoted to its own first-class deliverable, ahead of
+any charting work.
 
-### 3. Energy & Cost
-Audience: Tim, wanting to know what this costs to run.
-- `sp_outdoor_power` over time; daily/monthly kWh
-- Needs a Grafana dashboard variable for electricity rate ($/kWh) to convert
-  kWh → dollars — ask Tim for the rate, or make it a text variable
-- Compressor current & inverter current as a sanity cross-check against power
-- Energy vs. outdoor temperature scatter — "what does a 95° day cost"
+Two gaps the first draft missed entirely:
 
-### 4. Refrigeration Diagnostics
-Audience: Tim or a technician, troubleshooting or watching for slow degradation.
-- Suction/discharge/coil/liquid temps, one panel, four lines
-- `sp_eev_superheat` trended over **weeks** — a slow upward drift is the
-  classic early signature of a refrigerant leak, well before it shows up in
-  comfort. This is the panel that most needs a long time window by default.
-- EEV opening, suction pressure, inverter fin temp
+**Unit calibration blocks legibility.** Nine fields were stored raw with unknown
+units. A panel reading `1630` for discharge temperature is not a product, it is
+a number. This had to be resolved before charting anything — see below. Mostly
+now resolved.
 
-### 5. Performance Curve
-Audience: Tim, curious how well the system actually performs.
-- Compressor RPS / `sp_frequency_pct` vs. outdoor temp — replaces the old
-  `pct_running`-only efficiency curve with real modulation data
-- Power vs. outdoor temp — a proper power-based efficiency curve, now that
-  actual watts exist instead of a binary running/not-running proxy
+**Data-trust needs to be visible.** If the Skyport poll silently stops, every
+new panel goes blank and there is no way to tell "system is off" from "data
+collection broke". Every dashboard needs a freshness indicator.
 
-### 6. Weekly Summary
-Audience: Tim, once a week, not wanting to dig.
-- Single stats: total heat/cool hours, kWh used, min/max indoor & outdoor,
-  any faults this week
-- Table/stat format, not time series — a report, not something to stare at
+## Unit calibration — resolved from live data
 
-## The one capability gap worth prioritizing above the dashboards
+Method: cross-reference against a field whose unit is already known.
+`sp_od_air_temp` ranged 763–891 over a period when `outdoor_f` ranged 75.2–84.2.
+Divide by 10 and they coincide, which fixes the scale for the whole temperature
+family.
 
-`sp_compressor_runtime` is a **cumulative counter** from the equipment itself —
-not a point sample, not an estimate. `getSeries()` already exposes it correctly
-(bucket `MAX`, so it reports the running total as of the end of the bucket),
-but nothing yet computes the actual **interval delta** between buckets, which
-is what gives exact compressor-on seconds with zero sampling error — strictly
-better than every runtime number the bridge has produced so far, including the
-`equipment_status`-based `runtime_heat_min`/`runtime_cool_min` that's been in
-place since the start.
+**Confirmed — safe to convert:**
 
-Two ways to get there, pick one when picking this up:
-- A `LAG()` window function either directly in `getSeries()`'s SQL, or as a
-  new query/endpoint dedicated to it
-- Or handle it client-side in Grafana via a transform on the raw `MAX` series
+| Field(s) | Unit | Evidence |
+|---|---|---|
+| `sp_od_air_temp`, `sp_suction_temp`, `sp_discharge_temp`, `sp_od_coil_temp`, `sp_od_liquid_temp`, `sp_eev_suction_temp`, `sp_eev_liquid_temp` | tenths °F | od_air matches known outdoor_f; all others land in plausible ranges (suction 38.9–76.8 °F, discharge 102.5–150.6 °F) |
+| `sp_suction_pressure` | psi | 61–192, right for R-410A across on/off |
+| `sp_od_fan_rpm` | RPM | 0–998 |
+| `sp_indoor_airflow` | CFM | 0–1126 |
+| `sp_eev_opening` | percent | 0–100 |
+| `sp_compressor_current`, `sp_inverter_current` | deciamps | 0–9.3 A and 0–5.0 A once scaled |
 
-This is arguably higher-value than dashboards 3–5 above and should probably be
-built before or alongside them, since several of those panels (Energy & Cost's
-runtime framing, Performance Curve) would be more meaningful with exact runtime
-instead of the sampled estimate.
+**Still uncertain — chart raw, label as raw, do not convert:**
 
-## Suggested order
+| Field | Observed | Problem |
+|---|---|---|
+| `sp_eev_superheat` | 271–846 | As tenths °F that is 27–85 °F superheat. Normal is 8–15 °F. Either a different scale or not superheat as understood. |
+| `sp_inverter_fin_temp` | 5.5–8.5 | Implausibly narrow and cold for a heatsink. |
+| `sp_indoor_power` | 842–2830, never zero | Scale unclear, and a blower drawing 842 W at idle is not credible. |
 
-1. Deploy the `/api/series` expansion (`npx wrangler deploy`) — committed but not live
-2. System Health & Alerting dashboard + the actual Grafana alert rule
-3. Compressor runtime delta (LAG-based exact runtime)
-4. Energy & Cost
-5. Refrigeration Diagnostics
-6. Performance Curve
-7. Weekly Summary
+Do not guess these into a conversion. The sentinel bug and the equipment-status
+misreading both came from confident guesses; raw with an honest label is better
+than wrong with a unit.
 
-Confirm this ordering and the dashboard scope with Tim before building —
-this file is a proposal, not an approved spec.
+## Three dashboards
+
+### A. Home — daily glance
+Question: *is the house comfortable and is the system behaving?*
+Cadence: ambient, several times a day. Must read in five seconds.
+
+Largely exists. Additions:
+- Current power draw as a single stat
+- Data-freshness stat (minutes since last reading), amber past 10, red past 20
+
+### B. Energy & Efficiency — monthly decision
+Question: *what is this costing, and is it performing as it should?*
+Cadence: monthly, or when a bill surprises. Merges the old Energy & Cost and
+Performance Curve.
+
+- Power over time; kWh per day, per month
+- Cost, via a dashboard variable for $/kWh (ask for the actual rate)
+- Power vs. outdoor temperature — the real efficiency curve, now with watts
+  instead of a running/not-running proxy
+- Compressor modulation (`sp_compressor_rps`, `sp_frequency_pct`) vs. outdoor
+  temperature — shows whether the inverter is actually modulating or just
+  cycling, which is the thing a variable-speed system is sold on
+- Runtime hours per day, from the exact counter delta once built
+
+### C. System Health & Diagnostics — seasonal and troubleshooting
+Question: *is anything wrong, or slowly getting worse?*
+Cadence: rarely by choice, often because the alert fired. Merges the old Health
+and Refrigeration dashboards.
+
+- All six `sp_fault_*` as stat panels, green at 0
+- Refrigerant circuit: suction / discharge / coil / liquid, converted to °F
+- Suction pressure, EEV opening
+- Superheat trended over weeks, clearly labelled as raw units
+- Airflow and fan RPM
+- Skyport enrichment freshness — how long since `sp_*` columns were last non-null
+
+## Deliverables, in order
+
+1. ~~**Unit conversion in `/api/series`**~~ — **done**. Confirmed set served as
+   `_f` and `_a`; the three uncertain fields as `_raw`.
+2. ~~**Alert rule**~~ — **done**, as `grafana/alerting/daikin-alerts.yaml`.
+   Two rules: collection stalled (>600s, two missed cycles) and any non-zero
+   fault. **Untested against a live Grafana** — provisioning schemas move
+   between versions. If import fails, build them in the UI; the thresholds and
+   reasoning are the durable part.
+3. ~~**Exact runtime from the counter delta**~~ — **done**, but it does less
+   than the first draft claimed. Measured against live data, the counter
+   increments by exactly 1 per hour of compressor operation:
+
+   ```
+   HR            RT     DELTA  AVG RPS
+   1787554800    9333   1      39.3
+   1787558400    9334   1      35.0
+   1787572800    9337   0      9.8
+   ```
+
+   So it is **exact at hourly and daily buckets** and **mostly zero at
+   five-minute** ones. It gives true runtime totals, but it does not supersede
+   the `equipment_status` estimate for fine-grained cycling — the two answer
+   different questions and both should stay. Exposed as
+   `compressor_runtime_delta`.
+4. ~~**Dashboard B** — Energy & Efficiency~~ — **done**,
+   `grafana/dashboard-energy.json`, 5 panels, 30-day default.
+5. ~~**Dashboard C** — System Health & Diagnostics~~ — **done**,
+   `grafana/dashboard-health.json`, 11 panels, 14-day default.
+6. **Dashboard A additions** — deliberately *not* done. The two additions
+   (current power, data freshness) now live on the Energy and Health
+   dashboards respectively, and `grafana/dashboard.json` is Tim's own export
+   carrying his UI customisations. Editing it programmatically risked clobbering
+   those for marginal gain. Add them by hand if the daily-glance view still
+   wants them.
+
+## Open questions
+
+- Electricity rate for cost panels ($/kWh)? Until then, cost panels use a
+  variable defaulting to a placeholder.
+- Is `sp_indoor_power` worth charting at all given the unresolved scale?
+- Grafana alert delivery: email, or something else?
+
+## Remaining
+
+- Import the two new dashboards and confirm they render (all columns verified
+  present in the API response, but not yet viewed in Grafana).
+- Import or hand-build the alert rules.
+- Electricity rate for cost panels — the Energy dashboard currently charts watts
+  and hours but no dollars, pending a $/kWh figure.
+- `sp_eev_superheat`, `sp_inverter_fin_temp`, `sp_indoor_power` remain
+  uncalibrated. Superheat is charted raw because its *trend* is meaningful even
+  when its scale is not; the other two are not charted at all.
