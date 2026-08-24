@@ -59,7 +59,7 @@ default group and needs no flag.
 Apply the schema. This is the step most easily skipped, and everything 500s without it:
 
 ```bash
-turso db shell daikin < migrations/0001_init.sql
+for f in migrations/*.sql; do turso db shell daikin < "$f"; done
 ```
 
 Confirm all three tables exist:

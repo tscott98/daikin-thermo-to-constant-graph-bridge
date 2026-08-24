@@ -21,6 +21,9 @@ export interface Reading {
   hum_outdoor: number | null;
   heat_setpoint_c: number | null;
   cool_setpoint_c: number | null;
+  setpoint_delta_c: number | null;
+  setpoint_min_c: number | null;
+  setpoint_max_c: number | null;
   mode: number | null;
   equipment_status: number | null;
   fan_circulate: number | null;
@@ -67,6 +70,9 @@ function rowToReading(r: Row): Reading {
     hum_outdoor: asNum(r['hum_outdoor']),
     heat_setpoint_c: asNum(r['heat_setpoint_c']),
     cool_setpoint_c: asNum(r['cool_setpoint_c']),
+    setpoint_delta_c: asNum(r['setpoint_delta_c']),
+    setpoint_min_c: asNum(r['setpoint_min_c']),
+    setpoint_max_c: asNum(r['setpoint_max_c']),
     mode: asNum(r['mode']),
     equipment_status: asNum(r['equipment_status']),
     fan_circulate: asNum(r['fan_circulate']),
@@ -106,6 +112,9 @@ export function toReading(
     hum_outdoor: num(detail.humOutdoor),
     heat_setpoint_c: num(detail.heatSetpoint),
     cool_setpoint_c: num(detail.coolSetpoint),
+    setpoint_delta_c: num(detail.setpointDelta),
+    setpoint_min_c: num(detail.setpointMinimum),
+    setpoint_max_c: num(detail.setpointMaximum),
     mode: num(detail.mode),
     equipment_status: num(detail.equipmentStatus),
     fan_circulate: num(detail.fanCirculate),
@@ -125,15 +134,18 @@ export async function insertReadings(db: Db, rows: Reading[]): Promise<number> {
 
   const sql = `INSERT OR IGNORE INTO readings (
       device_id, ts, temp_indoor_c, hum_indoor, temp_outdoor_c, hum_outdoor,
-      heat_setpoint_c, cool_setpoint_c, mode, equipment_status,
+      heat_setpoint_c, cool_setpoint_c, setpoint_delta_c, setpoint_min_c, setpoint_max_c,
+      mode, equipment_status,
       fan_circulate, fan_circulate_spd, schedule_enabled, raw, published
-    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,0)`;
+    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,0)`;
 
   const statements: InStatement[] = rows.map((r) => ({
     sql,
     args: [
       r.device_id, r.ts, r.temp_indoor_c, r.hum_indoor, r.temp_outdoor_c, r.hum_outdoor,
-      r.heat_setpoint_c, r.cool_setpoint_c, r.mode, r.equipment_status,
+      r.heat_setpoint_c, r.cool_setpoint_c,
+      r.setpoint_delta_c, r.setpoint_min_c, r.setpoint_max_c,
+      r.mode, r.equipment_status,
       r.fan_circulate, r.fan_circulate_spd, r.schedule_enabled, r.raw,
     ],
   }));

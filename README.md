@@ -65,7 +65,8 @@ are used today; the remainder leaves room to add metrics without renumbering.
 | +9 | Cooling Runtime | min | 15 sensor level |
 | +10 | Indoor−Outdoor Delta | °F | 11 temperature |
 
-Turso keeps more than it graphs: the metrics above as typed columns, plus the complete API
+Turso keeps more than it graphs: the metrics above as typed columns, plus `setpoint_delta_c`,
+`setpoint_min_c` and `setpoint_max_c` (the system's configured limits), plus the complete API
 response as raw JSON. The raw JSON is pruned after `RAW_RETENTION_DAYS`, so any field outside the
 typed columns is retained only for that window.
 
