@@ -11,8 +11,9 @@
 import type { InStatement, Row } from '@libsql/client/web';
 import type { Db } from './client';
 import type { DeviceDetail, DeviceSummary } from '../daikin/types';
+import { EMPTY_SKYPORT, type SkyportFields } from '../skyport/map';
 
-export interface Reading {
+export interface Reading extends SkyportFields {
   device_id: string;
   ts: number;
   temp_indoor_c: number | null;
@@ -32,6 +33,10 @@ export interface Reading {
   raw: string | null;
   published: number;
 }
+
+// Reading carries the Skyport columns too; they are null when that poll is
+// skipped or fails, which must never block an integrator reading.
+export type ReadingWithSkyport = Reading & SkyportFields;
 
 export interface DeviceRow {
   id: string;
@@ -78,6 +83,44 @@ function rowToReading(r: Row): Reading {
     fan_circulate: asNum(r['fan_circulate']),
     fan_circulate_spd: asNum(r['fan_circulate_spd']),
     schedule_enabled: asNum(r['schedule_enabled']),
+    sp_outdoor_power: asNum(r['sp_outdoor_power']),
+    sp_indoor_power: asNum(r['sp_indoor_power']),
+    sp_compressor_current: asNum(r['sp_compressor_current']),
+    sp_inverter_current: asNum(r['sp_inverter_current']),
+    sp_od_fan_current: asNum(r['sp_od_fan_current']),
+    sp_compressor_runtime: asNum(r['sp_compressor_runtime']),
+    sp_compressor_rps: asNum(r['sp_compressor_rps']),
+    sp_target_compressor_rps: asNum(r['sp_target_compressor_rps']),
+    sp_frequency_pct: asNum(r['sp_frequency_pct']),
+    sp_cool_demand_pct: asNum(r['sp_cool_demand_pct']),
+    sp_fan_demand_pct: asNum(r['sp_fan_demand_pct']),
+    sp_indoor_airflow: asNum(r['sp_indoor_airflow']),
+    sp_od_fan_rpm: asNum(r['sp_od_fan_rpm']),
+    sp_od_fan_target: asNum(r['sp_od_fan_target']),
+    sp_suction_temp: asNum(r['sp_suction_temp']),
+    sp_discharge_temp: asNum(r['sp_discharge_temp']),
+    sp_od_coil_temp: asNum(r['sp_od_coil_temp']),
+    sp_od_liquid_temp: asNum(r['sp_od_liquid_temp']),
+    sp_suction_pressure: asNum(r['sp_suction_pressure']),
+    sp_eev_opening: asNum(r['sp_eev_opening']),
+    sp_inverter_fin_temp: asNum(r['sp_inverter_fin_temp']),
+    sp_eev_superheat: asNum(r['sp_eev_superheat']),
+    sp_eev_suction_temp: asNum(r['sp_eev_suction_temp']),
+    sp_eev_liquid_temp: asNum(r['sp_eev_liquid_temp']),
+    sp_reversing_valve: asNum(r['sp_reversing_valve']),
+    sp_od_air_temp: asNum(r['sp_od_air_temp']),
+    sp_hum_setpoint: asNum(r['sp_hum_setpoint']),
+    sp_dehum_setpoint: asNum(r['sp_dehum_setpoint']),
+    sp_overcool_amount: asNum(r['sp_overcool_amount']),
+    sp_zone1_damper: asNum(r['sp_zone1_damper']),
+    sp_aq_outdoor_ozone: asNum(r['sp_aq_outdoor_ozone']),
+    sp_aq_outdoor_particles: asNum(r['sp_aq_outdoor_particles']),
+    sp_fault_od_critical: asNum(r['sp_fault_od_critical']),
+    sp_fault_od_minor: asNum(r['sp_fault_od_minor']),
+    sp_fault_ifc_critical: asNum(r['sp_fault_ifc_critical']),
+    sp_fault_ifc_minor: asNum(r['sp_fault_ifc_minor']),
+    sp_fault_stat_critical: asNum(r['sp_fault_stat_critical']),
+    sp_fault_stat_minor: asNum(r['sp_fault_stat_minor']),
     raw: asStr(r['raw']),
     published: asNum(r['published']) ?? 0,
   };
@@ -120,6 +163,7 @@ export function toReading(
     fan_circulate: num(detail.fanCirculate),
     fan_circulate_spd: num(detail.fanCirculateSpeed),
     schedule_enabled: bool(detail.scheduleEnabled),
+    ...EMPTY_SKYPORT,
     raw: keepRaw ? JSON.stringify(detail) : null,
     published: 0,
   };
@@ -136,8 +180,19 @@ export async function insertReadings(db: Db, rows: Reading[]): Promise<number> {
       device_id, ts, temp_indoor_c, hum_indoor, temp_outdoor_c, hum_outdoor,
       heat_setpoint_c, cool_setpoint_c, setpoint_delta_c, setpoint_min_c, setpoint_max_c,
       mode, equipment_status,
-      fan_circulate, fan_circulate_spd, schedule_enabled, raw, published
-    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,0)`;
+      fan_circulate, fan_circulate_spd, schedule_enabled,
+      sp_outdoor_power, sp_indoor_power, sp_compressor_current, sp_inverter_current,
+      sp_od_fan_current, sp_compressor_runtime, sp_compressor_rps, sp_target_compressor_rps,
+      sp_frequency_pct, sp_cool_demand_pct, sp_fan_demand_pct, sp_indoor_airflow,
+      sp_od_fan_rpm, sp_od_fan_target, sp_suction_temp, sp_discharge_temp,
+      sp_od_coil_temp, sp_od_liquid_temp, sp_suction_pressure, sp_eev_opening,
+      sp_inverter_fin_temp, sp_eev_superheat, sp_eev_suction_temp, sp_eev_liquid_temp,
+      sp_reversing_valve, sp_od_air_temp, sp_hum_setpoint, sp_dehum_setpoint,
+      sp_overcool_amount, sp_zone1_damper, sp_aq_outdoor_ozone, sp_aq_outdoor_particles,
+      sp_fault_od_critical, sp_fault_od_minor, sp_fault_ifc_critical, sp_fault_ifc_minor,
+      sp_fault_stat_critical, sp_fault_stat_minor,
+      raw, published
+    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,0)`;
 
   const statements: InStatement[] = rows.map((r) => ({
     sql,
@@ -146,7 +201,18 @@ export async function insertReadings(db: Db, rows: Reading[]): Promise<number> {
       r.heat_setpoint_c, r.cool_setpoint_c,
       r.setpoint_delta_c, r.setpoint_min_c, r.setpoint_max_c,
       r.mode, r.equipment_status,
-      r.fan_circulate, r.fan_circulate_spd, r.schedule_enabled, r.raw,
+      r.fan_circulate, r.fan_circulate_spd, r.schedule_enabled,
+      r.sp_outdoor_power, r.sp_indoor_power, r.sp_compressor_current, r.sp_inverter_current,
+      r.sp_od_fan_current, r.sp_compressor_runtime, r.sp_compressor_rps, r.sp_target_compressor_rps,
+      r.sp_frequency_pct, r.sp_cool_demand_pct, r.sp_fan_demand_pct, r.sp_indoor_airflow,
+      r.sp_od_fan_rpm, r.sp_od_fan_target, r.sp_suction_temp, r.sp_discharge_temp,
+      r.sp_od_coil_temp, r.sp_od_liquid_temp, r.sp_suction_pressure, r.sp_eev_opening,
+      r.sp_inverter_fin_temp, r.sp_eev_superheat, r.sp_eev_suction_temp, r.sp_eev_liquid_temp,
+      r.sp_reversing_valve, r.sp_od_air_temp, r.sp_hum_setpoint, r.sp_dehum_setpoint,
+      r.sp_overcool_amount, r.sp_zone1_damper, r.sp_aq_outdoor_ozone, r.sp_aq_outdoor_particles,
+      r.sp_fault_od_critical, r.sp_fault_od_minor, r.sp_fault_ifc_critical, r.sp_fault_ifc_minor,
+      r.sp_fault_stat_critical, r.sp_fault_stat_minor,
+      r.raw,
     ],
   }));
 
@@ -219,6 +285,25 @@ export async function upsertDevices(
     })),
     'write',
   );
+}
+
+/**
+ * Static per-install config from Skyport. Kept on devices rather than repeated
+ * in every five-minute reading, since none of it changes.
+ */
+export async function updateDeviceSkyport(
+  db: Db,
+  deviceId: string,
+  fields: Record<string, number | string | null>,
+): Promise<void> {
+  const entries = Object.entries(fields).filter(([, v]) => v !== null);
+  if (entries.length === 0) return;
+
+  const set = entries.map(([k]) => `${k} = ?`).join(', ');
+  await db.execute({
+    sql: `UPDATE devices SET ${set} WHERE id = ?`,
+    args: [...entries.map(([, v]) => v as number | string), deviceId],
+  });
 }
 
 export async function listDevices(db: Db): Promise<DeviceRow[]> {

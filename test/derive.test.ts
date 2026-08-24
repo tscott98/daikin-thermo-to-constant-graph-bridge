@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { cToF, round2, runtimeMinutes, metricsFor } from '../src/derive';
 import { EQUIPMENT_STATUS } from '../src/daikin/types';
 import type { Reading } from '../src/db/repo';
+import { EMPTY_SKYPORT } from '../src/skyport/map';
 
 const reading = (over: Partial<Reading> = {}): Reading => ({
   device_id: 'dev-1',
@@ -22,6 +23,7 @@ const reading = (over: Partial<Reading> = {}): Reading => ({
   schedule_enabled: 1,
   raw: null,
   published: 0,
+  ...EMPTY_SKYPORT,
   ...over,
 });
 

@@ -14,10 +14,14 @@ import {
   kvSet,
   pruneRaw,
   toReading,
+  updateDeviceSkyport,
   upsertDevices,
   type Reading,
 } from './db/repo';
 import { DaikinClient } from './daikin/client';
+import { SkyportClient } from './skyport/client';
+import { skyportFields } from './skyport/map';
+import { skyportDeviceFields } from './skyport/device';
 import { publishPending, type PublishOutcome } from './constantgraph/publish';
 
 const PRUNE_MARKER = 'prune:last';
@@ -31,6 +35,7 @@ export interface CycleResult {
   publish: PublishOutcome;
   pruned: number;
   errors: string[];
+  skyport: { attempted: number; enriched: number };
 }
 
 /**
@@ -68,11 +73,36 @@ export async function runCycle(env: Env, db: Db): Promise<CycleResult> {
 
   // Sequential on purpose: Daikin allows at most 3 concurrent requests, and a
   // handful of thermostats is nowhere near the Worker's wall-clock budget.
+  // Supplementary consumer-API poll. Optional by design: without a refresh
+  // token it is skipped entirely, and any failure degrades to null columns
+  // rather than costing us the integrator reading.
+  const skyportEnabled = Boolean(env.DAIKIN_SKYPORT_REFRESH_TOKEN);
+  const skyport = skyportEnabled ? new SkyportClient(env, db) : null;
+  const skyportStats = { attempted: 0, enriched: 0 };
+
   const rows: Reading[] = [];
   for (const device of devices) {
     try {
       const detail = await daikin.getDevice(device.id);
-      rows.push(toReading(device.id, ts, detail, settings.rawRetentionDays > 0));
+      const row = toReading(device.id, ts, detail, settings.rawRetentionDays > 0);
+
+      if (skyport) {
+        skyportStats.attempted += 1;
+        try {
+          const data = await skyport.getDeviceData(device.id);
+          Object.assign(row, skyportFields(data));
+          // Static config lives on devices; refreshing it here is one extra
+          // query and keeps the equipment description current.
+          await updateDeviceSkyport(db, device.id, skyportDeviceFields(data));
+          skyportStats.enriched += 1;
+        } catch (err) {
+          errors.push(
+            `skyport ${device.id}: ${err instanceof Error ? err.message : String(err)}`,
+          );
+        }
+      }
+
+      rows.push(row);
     } catch (err) {
       // One unreachable thermostat must not cost us the others' samples.
       errors.push(`device ${device.id}: ${err instanceof Error ? err.message : String(err)}`);
@@ -98,7 +128,16 @@ export async function runCycle(env: Env, db: Db): Promise<CycleResult> {
 
   const pruned = await maybePrune(db, settings.rawRetentionDays, nowSec);
 
-  return { ts, devices: devices.length, captured: rows.length, inserted, publish, pruned, errors };
+  return {
+    ts,
+    devices: devices.length,
+    captured: rows.length,
+    inserted,
+    publish,
+    pruned,
+    errors,
+    skyport: skyportStats,
+  };
 }
 
 /** Raw-JSON prune, at most once a day, so the steady-state run stays cheap. */

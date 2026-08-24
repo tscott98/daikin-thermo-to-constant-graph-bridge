@@ -26,6 +26,11 @@ export interface Env {
   DAIKIN_EMAIL: string;
   DAIKIN_INTEGRATOR_TOKEN: string;
   CG_API_KEY: string;
+
+  // Skyport (consumer API). Optional: absent means the supplementary poll is
+  // skipped. The account password is never stored -- only a refresh token.
+  DAIKIN_SKYPORT_EMAIL: string;
+  DAIKIN_SKYPORT_REFRESH_TOKEN: string;
   READ_API_KEY: string;
 }
 

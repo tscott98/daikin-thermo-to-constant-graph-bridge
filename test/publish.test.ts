@@ -17,6 +17,7 @@ import {
 } from '../src/config';
 import { EQUIPMENT_STATUS } from '../src/daikin/types';
 import type { DeviceRow, Reading } from '../src/db/repo';
+import { EMPTY_SKYPORT } from '../src/skyport/map';
 
 const device = (over: Partial<DeviceRow> = {}): DeviceRow => ({
   id: 'dev-1',
@@ -49,6 +50,7 @@ const reading = (over: Partial<Reading> = {}): Reading => ({
   schedule_enabled: 1,
   raw: null,
   published: 0,
+  ...EMPTY_SKYPORT,
   ...over,
 });
 

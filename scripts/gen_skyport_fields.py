@@ -1,0 +1,85 @@
+#!/usr/bin/env python3
+"""Single source of truth for Skyport columns; emits the migration and the TS map.
+
+Values chosen from an actual ONETOUCH probe (scripts/probe-skyport.sh), not from
+a documentation field list: every column here was observed populated and
+non-sentinel on real hardware.
+
+raw   = store the wire value unchanged; unit uncertain, documented as such
+pct2  = 0-200 in half-percent steps -> 0-100
+dw    = deciwatts -> watts
+"""
+FIELDS = [
+    # column,                    api field,                          kind,  note
+    ("sp_outdoor_power",         "ctOutdoorPower",                    "dw",  "outdoor unit power, W"),
+    ("sp_indoor_power",          "ctIndoorPower",                     "raw", "indoor unit power, unit unverified"),
+    ("sp_compressor_current",    "ctCompressorCurrent",               "raw", "compressor current, likely deciamps"),
+    ("sp_inverter_current",      "ctInverterCurrent",                 "raw", "inverter current, likely deciamps"),
+    ("sp_od_fan_current",        "ctODFanMotorCurrent",               "raw", "outdoor fan motor current"),
+
+    ("sp_compressor_runtime",    "ctOutdoorCompressorRunTime",        "raw", "CUMULATIVE counter; difference it for true runtime"),
+
+    ("sp_compressor_rps",        "ctCurrentCompressorRPS",            "raw", "compressor speed, rev/sec"),
+    ("sp_target_compressor_rps", "ctTargetCompressorspeed",           "raw", "commanded compressor speed"),
+    ("sp_frequency_pct",         "ctOutdoorFrequencyInPercent",       "pct2","inverter frequency, %"),
+    ("sp_cool_demand_pct",       "ctOutdoorCoolRequestedDemand",      "pct2","outdoor cool demand, %"),
+    ("sp_fan_demand_pct",        "ctIFCFanRequestedDemandPercent",    "pct2","indoor fan demand, %"),
+    ("sp_indoor_airflow",        "ctIFCIndoorBlowerAirflow",          "raw", "blower airflow, CFM"),
+    ("sp_od_fan_rpm",            "ctOutdoorFanRPM",                   "raw", "outdoor fan speed, RPM"),
+    ("sp_od_fan_target",         "ctTargetODFanRPM",                  "raw", "commanded outdoor fan, unit unverified"),
+
+    ("sp_suction_temp",          "ctOutdoorSuctionTemperature",       "raw", "suction line temp, likely tenths F"),
+    ("sp_discharge_temp",        "ctOutdoorDischargeTemperature",     "raw", "discharge temp, likely tenths F"),
+    ("sp_od_coil_temp",          "ctOutdoorCoilTemperature",          "raw", "outdoor coil temp, likely tenths F"),
+    ("sp_od_liquid_temp",        "ctOutdoorLiquidTemperature",        "raw", "outdoor liquid line temp, likely tenths F"),
+    ("sp_suction_pressure",      "ctOutdoorSuctionPressure",          "raw", "suction pressure, likely psi"),
+    ("sp_eev_opening",           "ctOutdoorEEVOpening",               "raw", "expansion valve opening"),
+    ("sp_inverter_fin_temp",     "ctInverterFinTemp",                 "raw", "inverter heatsink temp, C"),
+    ("sp_eev_superheat",         "ctEEVCoilSuperHeatValue",           "raw", "superheat; trend it to spot charge loss"),
+    ("sp_eev_suction_temp",      "ctEEVCoilSuctionTemperature",       "raw", "indoor coil suction temp"),
+    ("sp_eev_liquid_temp",       "ctEEVCoilLiquidTemperature",        "raw", "indoor coil liquid temp"),
+    ("sp_reversing_valve",       "ctReversingValve",                  "raw", "heat/cool direction"),
+
+    ("sp_od_air_temp",           "ctOutdoorAirTemperature",           "raw", "outdoor unit's own air sensor, tenths F"),
+    ("sp_hum_setpoint",          "humSP",                             "raw", "humidification setpoint, %"),
+    ("sp_dehum_setpoint",        "dehumSP",                           "raw", "dehumidification setpoint, %"),
+    ("sp_overcool_amount",       "overcoolAmount",                    "raw", "permitted overcool for dehum, C"),
+    ("sp_zone1_damper",          "Zone1DamperPosition",               "raw", "zone 1 damper position, %"),
+    ("sp_aq_outdoor_ozone",      "aqOutdoorOzone",                    "raw", "outdoor ozone, ppb"),
+    ("sp_aq_outdoor_particles",  "aqOutdoorParticles",                "raw", "outdoor particulates, ug/m3"),
+
+    ("sp_fault_od_critical",     "ctOutdoorCriticalFault",            "raw", "0 = none"),
+    ("sp_fault_od_minor",        "ctOutdoorMinorFault",               "raw", "0 = none"),
+    ("sp_fault_ifc_critical",    "ctIFCCriticalFault",                "raw", "0 = none"),
+    ("sp_fault_ifc_minor",       "ctIFCMinorFault",                   "raw", "0 = none"),
+    ("sp_fault_stat_critical",   "ctStatCriticalFault",               "raw", "0 = none"),
+    ("sp_fault_stat_minor",      "ctStatMinorFault",                  "raw", "0 = none"),
+]
+
+# Static per-install config; belongs on devices, not repeated every 5 minutes.
+DEVICE_FIELDS = [
+    ("sp_tonnage",            "ctOutdoorTonnage",       "outdoor unit size code"),
+    ("sp_cooling_rated_power","ctCoolingRatedPower",    "rated cooling power"),
+    ("sp_heating_rated_power","ctHeatingRatedPower",    "rated heating power"),
+    ("sp_od_unit_type",       "ctOutdoorUnitType",      "outdoor unit type code"),
+    ("sp_ifc_unit_type",      "ctIFCUnitType",          "indoor unit type code"),
+    ("sp_stat_model",         "statModel",              "thermostat model string"),
+    ("sp_compressor_min_on",  "compressorMinOn",        "minimum compressor on time, ms"),
+    ("sp_compressor_min_off", "compressorMinOff",       "minimum compressor off time, ms"),
+]
+
+if __name__ == "__main__":
+    import sys
+    what = sys.argv[1] if len(sys.argv) > 1 else "sql"
+    if what == "sql":
+        print("-- Generated by scripts/gen_skyport_fields.py. Do not hand-edit.")
+        print("-- Skyport metrics observed populated on real hardware.")
+        print("-- Sentinels (255 / 32767 / 65535) are stored as NULL by the mapper.\n")
+        for col, field, kind, note in FIELDS:
+            print(f"ALTER TABLE readings ADD COLUMN {col:<26} REAL;  -- {field} ({note})")
+        print()
+        for col, field, note in DEVICE_FIELDS:
+            t = "TEXT" if col == "sp_stat_model" else "REAL"
+            print(f"ALTER TABLE devices  ADD COLUMN {col:<26} {t};  -- {field} ({note})")
+    elif what == "cols":
+        print("\n".join(c for c, *_ in FIELDS))

@@ -11,3 +11,9 @@ reference/
 # Raw Grafana exports kept locally; the curated copy is grafana/dashboard.json
 grafana/exports/
 grafana/Daikin One thermostat-*.json
+
+# Local API probe dumps; contain your device data
+probe/
+
+# Python cache from scripts/*.py
+__pycache__/
