@@ -1,16 +1,18 @@
 /**
- * Ops endpoints.
+ * Ops and chart endpoints.
  *
- * Deliberately minimal: analysis happens by connecting to Turso directly with
- * a libSQL driver, so there is no bulk-export API to keep in sync with the
- * schema. What is here is what you cannot do from a SQL client -- check
- * liveness, force a poll, and register channel names with ConstantGraph.
+ * Ad-hoc analysis is done by connecting to Turso directly with a libSQL driver,
+ * so there is no general-purpose export API here. The routes are the things a
+ * SQL client cannot do: check liveness, force a poll, register ConstantGraph
+ * config, and serve /api/series for hosted dashboards such as Grafana, which
+ * cannot reach Turso themselves.
  */
 
 import type { Env } from '../config';
 import { settingsFrom } from '../config';
 import { createDb } from '../db/client';
-import { getStats, listDevices } from '../db/repo';
+import { getSeries, getStats, listDevices } from '../db/repo';
+import { parseSeriesQuery } from './query';
 import { ConstantGraphClient } from '../constantgraph/client';
 import {
   buildDevicesConfig,
@@ -80,7 +82,9 @@ function errorResponse(err: unknown): Response {
 
 async function route(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url);
-  const path = url.pathname.replace(/\/+$/, '') || '/';
+  // Collapse repeated slashes as well as trailing ones: a client with a
+  // trailing-slash base URL joined to a leading-slash path yields '//api/...'.
+  const path = url.pathname.replace(/\/{2,}/g, '/').replace(/\/+$/, '') || '/';
 
   // Unauthenticated liveness probe. Reports counts and lag, never readings.
   if (path === '/health' && request.method === 'GET') {
@@ -134,6 +138,44 @@ async function route(request: Request, env: Env): Promise<Response> {
     } catch (err) {
       return json({ error: err instanceof Error ? err.message : String(err) }, 500);
     }
+  }
+
+  // GET /api/series -- time-bucketed rows for Grafana's Infinity data source.
+  //
+  // Grafana sends $__from/$__to as epoch milliseconds and $__interval_ms for the
+  // panel's resolution, so both units are accepted and normalised to seconds.
+  if (path === '/api/series' && request.method === 'GET') {
+    const opts = parseSeriesQuery(url.searchParams, Math.floor(Date.now() / 1000));
+
+    const db = createDb(env);
+    const rows = await getSeries(db, opts);
+
+    const out = rows.map((r) => {
+      const ts = Number(r['ts']);
+      return {
+        // Both forms so Infinity can use whichever it parses more happily.
+        time: new Date(ts * 1000).toISOString(),
+        ts_ms: ts * 1000,
+        ...Object.fromEntries(
+          Object.entries(r).filter(([k]) => k !== 'ts'),
+        ),
+      };
+    });
+
+    if (opts.csv) {
+      const cols = out.length > 0 ? Object.keys(out[0] as object) : [];
+      const csv = [
+        cols.join(','),
+        ...out.map((row) =>
+          cols.map((c) => String((row as Record<string, unknown>)[c] ?? '')).join(','),
+        ),
+      ].join('\n');
+      return new Response(csv, {
+        headers: { 'Content-Type': 'text/csv; charset=utf-8' },
+      });
+    }
+
+    return json(out);
   }
 
   // POST /admin/config -- forwards a raw JSON body straight to /data/config.

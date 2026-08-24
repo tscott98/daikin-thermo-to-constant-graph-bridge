@@ -258,6 +258,65 @@ export async function getStats(db: Db): Promise<Stats> {
   };
 }
 
+
+export interface SeriesOptions {
+  fromTs: number;
+  toTs: number;
+  bucketSec: number;
+  deviceId?: string | undefined;
+  limit: number;
+}
+
+/**
+ * Time-bucketed rows for charting, converted to Fahrenheit on the way out.
+ *
+ * Aggregation is chosen per metric rather than averaging everything: sensor
+ * readings average, runtime minutes sum (so a bucket reports real minutes), and
+ * mode/equipment status take the max so a bucket shows the system ran at all
+ * rather than a meaningless fractional state. `pct_running` is the useful
+ * downsampled view of equipment status.
+ *
+ * bucketSec = 1 collapses to raw rows, since (ts / 1) * 1 = ts.
+ */
+export async function getSeries(db: Db, o: SeriesOptions): Promise<Row[]> {
+  const bucket = Math.max(1, Math.floor(o.bucketSec));
+  const where = ['ts >= ?', 'ts <= ?'];
+  const args: Array<string | number> = [bucket, bucket, o.fromTs, o.toTs];
+
+  if (o.deviceId) {
+    where.push('device_id = ?');
+    args.push(o.deviceId);
+  }
+  args.push(bucket, o.limit);
+
+  const res = await db.execute({
+    sql: `SELECT
+            device_id,
+            (ts / ?) * ?                                            AS ts,
+            COUNT(*)                                                AS samples,
+            ROUND(AVG(temp_indoor_c)   * 9 / 5 + 32, 2)             AS indoor_f,
+            ROUND(AVG(temp_outdoor_c)  * 9 / 5 + 32, 2)             AS outdoor_f,
+            ROUND(AVG(heat_setpoint_c) * 9 / 5 + 32, 2)             AS heat_setpoint_f,
+            ROUND(AVG(cool_setpoint_c) * 9 / 5 + 32, 2)             AS cool_setpoint_f,
+            ROUND(AVG(hum_indoor), 1)                               AS hum_indoor,
+            ROUND(AVG(hum_outdoor), 1)                              AS hum_outdoor,
+            ROUND((AVG(temp_indoor_c) - AVG(temp_outdoor_c)) * 9 / 5, 2) AS delta_f,
+            MAX(mode)                                               AS mode,
+            MAX(equipment_status)                                   AS equipment_status,
+            SUM(CASE WHEN equipment_status = 3            THEN 5 ELSE 0 END) AS runtime_heat_min,
+            SUM(CASE WHEN equipment_status IN (1, 2)      THEN 5 ELSE 0 END) AS runtime_cool_min,
+            ROUND(AVG(CASE WHEN equipment_status IN (1,2,3) THEN 1.0 ELSE 0.0 END) * 100, 1)
+                                                                    AS pct_running
+          FROM readings
+          WHERE ${where.join(' AND ')}
+          GROUP BY device_id, (ts / ?)
+          ORDER BY ts ASC
+          LIMIT ?`,
+    args,
+  });
+  return res.rows;
+}
+
 // --- kv_state: cached Daikin token, cached device list, last-prune marker ---
 
 export async function kvGet(db: Db, key: string): Promise<string | null> {

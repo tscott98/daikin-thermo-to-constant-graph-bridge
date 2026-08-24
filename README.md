@@ -15,7 +15,7 @@ than a month cannot be recovered from it.)
 
 So Turso is the system of record and ConstantGraph is the view. Turso is also how you get at the
 data from anywhere else, since it is plain SQLite over libSQL and any driver can connect to it.
-There is no bespoke export API to keep in sync with the schema.
+For hosted dashboards that cannot reach Turso, `/api/series` serves the same data over HTTP.
 
 ## How it works
 
@@ -152,6 +152,68 @@ HAVING samples > 5
 ORDER BY outdoor_f;
 ```
 
+## Grafana dashboards
+
+ConstantGraph covers the basics. For richer dashboards, Grafana can read this data through its
+Infinity data source, which queries JSON over HTTP. Grafana cannot connect to Turso directly —
+its SQLite plugin needs a local file — so `/api/series` exists to bridge that gap.
+
+Note that Grafana only *renders* here; it stores nothing. Its free-tier retention limits (14 days
+for metrics) don't apply, because the history stays in Turso.
+
+**Set up the data source.** Infinity ships pre-installed on Grafana Cloud. Add it, then:
+
+- Base URL: your Worker's origin
+- Under *Headers*, add `X-Api-Key` with your `READ_API_KEY`
+- Under *Security → Allowed hosts*, add the same origin
+
+**Import the dashboard.** [`grafana/dashboard.json`](grafana/dashboard.json) has six panels
+pre-wired. Dashboards → New → Import → paste the file, then pick your Infinity data source when
+prompted. It ships with a `device` textbox variable; leave it blank for all thermostats or paste
+an ID from `/api/stats`.
+
+| Panel | Shows |
+|---|---|
+| Comfort | Indoor temp vs both setpoints and outdoor, setpoints as dashed step lines |
+| Duty cycle | Percent of samples with the compressor running |
+| Runtime per bucket | Heating and cooling minutes, as bars |
+| Humidity | Indoor vs outdoor relative humidity |
+| Indoor − Outdoor delta | How hard the envelope is working |
+| Efficiency curve | Percent running against outdoor temperature, hourly buckets, XY chart |
+
+**To build panels by hand instead,** query type JSON, source URL, parser **Backend**, format
+**Time Series**:
+
+```
+/api/series?from=$__from&to=$__to&interval=$__interval_ms
+```
+
+Grafana substitutes epoch milliseconds for `$__from`/`$__to` and the panel resolution for
+`$__interval_ms`; the endpoint normalises all three to seconds. The Backend parser needs each
+column declared under *Parsing options & Result fields*: add `time` with Format `Time`, and each
+numeric column with Format `Number`. Infinity will not infer these, and a missing `time` column
+is the usual cause of "Data is missing a time field".
+
+**Alerting.** `/health` is unauthenticated and returns `seconds_since_last_reading`, so an alert
+on that crossing ~600 tells you collection has stopped. That is the one alert worth having.
+
+**Available columns:** `time` (ISO-8601), `ts_ms` (epoch ms), `device_id`, `samples`, `indoor_f`,
+`outdoor_f`, `heat_setpoint_f`, `cool_setpoint_f`, `hum_indoor`, `hum_outdoor`, `delta_f`,
+`mode`, `equipment_status`, `runtime_heat_min`, `runtime_cool_min`, `pct_running`.
+
+Aggregation is per metric rather than a blanket average, which matters once a panel spans more
+than a few days: sensor readings average, runtime minutes sum so a daily bucket reports real
+minutes, and `mode`/`equipment_status` take the maximum so a bucket shows the system ran at all
+rather than a meaningless fraction.
+
+Query parameters: `from`, `to` (epoch seconds or milliseconds), `interval` (bucket size in
+seconds or milliseconds, omit for raw 5-minute rows), `device`, `limit` (max 20,000), and
+`format=csv`.
+
+**If a panel is empty rather than erroring,** check the time range first: `from`/`to` accept both
+units, so passing seconds where Grafana would have sent milliseconds silently queries a window
+with no data.
+
 ## Ops endpoints
 
 Everything except `/health` requires an `X-Api-Key` header matching `READ_API_KEY`.
@@ -160,6 +222,7 @@ Everything except `/health` requires an `X-Api-Key` header matching `READ_API_KE
 |---|---|
 | `GET /health` | Unauthenticated liveness. Counts and lag only, never readings. |
 | `GET /api/stats` | Row counts, date range, backlog, per-device channel blocks. |
+| `GET /api/series` | Time-bucketed rows in Fahrenheit, for charting tools. See below. |
 | `POST /admin/poll` | Force a capture and publish cycle without waiting for cron. |
 | `POST /admin/bootstrap` | Register channels, devices, and graphs. Safe to re-run. |
 | `POST /admin/config` | Forward a raw JSON body to ConstantGraph's `/data/config`. |
@@ -227,13 +290,13 @@ The general rule: where the field tables and the worked examples disagree, follo
 
 ```bash
 npm install
-npm test          # 45 unit tests, no network or database needed
+npm test          # 57 unit tests, no network or database needed
 npm run typecheck
 npx wrangler dev  # needs .dev.vars; see SETUP.md
 ```
 
 Tests cover unit conversion, runtime derivation, channel allocation and collision, timestamp
-bucketing, graph reference limits, and the ConstantGraph payload builder, including that null
+bucketing, graph reference limits, series query parsing, and the ConstantGraph payload builder, including that null
 readings are omitted rather than sent as zero so a missing outdoor sensor leaves a gap instead of
 plotting 32 °F.
 
