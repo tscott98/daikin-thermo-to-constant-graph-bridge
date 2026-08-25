@@ -26,5 +26,15 @@ export function skyportDeviceFields(
     sp_compressor_min_on: plain(d.compressorMinOn),
     // minimum compressor off time, ms
     sp_compressor_min_off: plain(d.compressorMinOff),
+    // blower capability, CFM; lets airflow read as % of maximum
+    sp_blower_max_cfm: plain(d.ctIFCBlowerMotorMaxCFM),
+    // indoor rated CFM
+    sp_indoor_rated_cfm: plain(d.ctIndoorRatedCFM),
+    // Configured compressor ceiling in tenths RPS. Reads 730 on this unit,
+    // i.e. 73.0, which matches the brief -- so speeds observed above it are
+    // boost mode rather than a setting that differs from what was written down.
+    sp_cool_max_rps: plain(d.ctOutdoorCoolMaxRPS),
+    // boost enable; reads 2 here, which is what allows the ceiling to be exceeded
+    sp_boost_mode: plain(d.ctOutdoorBoostModeEnable),
   };
 }

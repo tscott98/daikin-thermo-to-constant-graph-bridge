@@ -41,6 +41,16 @@ def target(columns, url=BASE_URL, fmt="timeseries"):
     }]
 
 
+def color_faint(name, c):
+    """A companion series: same chart, deliberately subordinate to the main one."""
+    return {"matcher": {"id": "byName", "options": name},
+            "properties": [{"id": "color", "value": {"mode": "fixed", "fixedColor": c}},
+                           {"id": "custom.lineWidth", "value": 1},
+                           {"id": "custom.fillOpacity", "value": 0},
+                           {"id": "custom.lineStyle",
+                            "value": {"fill": "dash", "dash": [6, 4]}}]}
+
+
 def color(name, c):
     return {"matcher": {"id": "byName", "options": name},
             "properties": [{"id": "color", "value": {"mode": "fixed", "fixedColor": c}}]}
@@ -476,49 +486,62 @@ OZONE_STEPS = {"mode": "absolute", "steps": [
 ]}
 
 AIR = [
-    panel(1, "CO2 - ventilation and occupancy", [("ag_co2", "CO2")],
+    panel(1, "CO2 - ventilation and occupancy",
+          [("ag_co2", "CO2"), ("ag_co2_max", "CO2 peak")],
           {"h": 9, "w": 12, "x": 0, "y": 0}, unit="ppm",
           url=AIR_URL,
           desc="Outdoor air is about 420 ppm, so the excess over that is your own "
                "breath accumulating. Below 800 is comfortable; above 1200 has "
                "measurable effects on concentration. It doubles as an occupancy "
                "signal, which is what separates moisture generated indoors from "
-               "moisture leaking in.",
-          overrides=[{"matcher": {"id": "byName", "options": "CO2"},
+               "moisture leaking in. The solid line is the bucket mean and the "
+               "faint one its peak; at wide zoom they separate whenever a short "
+               "excursion is being averaged down.",
+          overrides=[color_faint("CO2 peak", "semi-dark-blue"),
+                     {"matcher": {"id": "byName", "options": "CO2"},
                       "properties": [{"id": "thresholds", "value": CO2_STEPS},
                                      {"id": "custom.thresholdsStyle", "value": {"mode": "area"}},
                                      {"id": "custom.fillOpacity", "value": 0},
                                      {"id": "custom.lineWidth", "value": 2}]}]),
 
     panel(2, "PM2.5 indoors vs outdoors",
-          [("ag_pm02", "Indoor PM2.5"), ("sp_aq_outdoor_particles", "Outdoor particulates")],
+          [("ag_pm02", "Indoor PM2.5"), ("ag_pm02_max", "Indoor peak"),
+           ("sp_aq_outdoor_particles", "Outdoor particulates")],
           {"h": 9, "w": 12, "x": 12, "y": 0},
           desc="The gap between the lines is filtration doing its job. Indoor "
                "tracking outdoor closely would mean particulates arrive faster "
                "than the filter removes them. The two come from different sensors "
-               "on different scales, so compare shapes rather than subtracting.",
+               "on different scales, so compare shapes rather than subtracting. "
+               "Indoor shows mean and peak; a peak that rises while the mean "
+               "stays flat is a brief indoor source rather than a filtration "
+               "problem.",
           overrides=[
               {"matcher": {"id": "byName", "options": "Indoor PM2.5"},
                "properties": [{"id": "color", "value": {"mode": "fixed", "fixedColor": "blue"}},
                               {"id": "thresholds", "value": PM25_STEPS}]},
+              color_faint("Indoor peak", "semi-dark-blue"),
               color("Outdoor particulates", "orange"),
           ]),
 
     panel(3, "Particle sizes",
-          [("ag_pm01", "PM1"), ("ag_pm02", "PM2.5"), ("ag_pm10", "PM10")],
+          [("ag_pm01_max", "PM1"), ("ag_pm02_max", "PM2.5"), ("ag_pm10_max", "PM10")],
           {"h": 8, "w": 12, "x": 0, "y": 9},
           url=AIR_URL,
-          desc="PM1 rising while PM2.5 stays flat suggests combustion or cooking. "
-               "PM10 moving alone suggests dust, or activity stirring up settled "
-               "material.",
+          desc="Bucket peaks, not means: these are event detectors, and a "
+               "five-minute cooking spike averaged across a wide bucket "
+               "disappears into the number that made it worth plotting. "
+               "PM1 rising while PM2.5 stays flat suggests combustion or "
+               "cooking. PM10 moving alone suggests dust, or activity stirring "
+               "up settled material.",
           overrides=[color("PM1", "purple"), color("PM2.5", "blue"),
                      color("PM10", "orange")]),
 
     panel(4, "Chemical pollutants",
-          [("ag_tvoc_index", "TVOC index"), ("ag_nox_index", "NOx index")],
+          [("ag_tvoc_index_max", "TVOC index"), ("ag_nox_index_max", "NOx index")],
           {"h": 8, "w": 12, "x": 12, "y": 9},
           url=AIR_URL,
-          desc="Sensor indices, not concentrations: 100 is the running baseline "
+          desc="Bucket peaks, for the same reason as the particle panel. "
+               "Sensor indices, not concentrations: 100 is the running baseline "
                "for this room, so excursions mark a change rather than an "
                "absolute level. Useful for spotting cleaning products, cooking, "
                "or off-gassing.",

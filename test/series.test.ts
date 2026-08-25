@@ -9,8 +9,19 @@ describe('skyportSelectClause', () => {
   // ones a caller did not ask for; these assertions read the joined form.
   const clause = skyportSelectClause().join(',\n');
 
-  it('projects every Skyport column exactly once', () => {
-    expect((clause.match(/ AS sp_/g) ?? []).length).toBe(SKYPORT_COLUMNS.length);
+  it('projects every Skyport column, and the spiky ones twice', () => {
+    // Outdoor ozone and particulates get a _max alongside the mean, so a
+    // short excursion is not averaged out of existence at wide zoom.
+    const spiky = ['sp_aq_outdoor_ozone', 'sp_aq_outdoor_particles'];
+    const aliases = skyportSelectClause().map(aliasOf);
+    for (const c of SKYPORT_COLUMNS) {
+      const hit = aliases.filter((a) => a === c || a === `${c}_f`
+        || a === `${c}_a` || a === `${c}_raw`);
+      expect(hit.length, c).toBe(1);
+    }
+    for (const c of spiky) expect(aliases, c).toContain(`${c}_max`);
+    expect((clause.match(/ AS sp_/g) ?? []).length)
+      .toBe(SKYPORT_COLUMNS.length + spiky.length);
   });
 
   it('averages continuous measurements that need no conversion', () => {

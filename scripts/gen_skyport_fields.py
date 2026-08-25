@@ -66,6 +66,30 @@ FIELDS = [
     ("sp_fault_ifc_minor",       "ctIFCMinorFault",                   "raw", "0 = none"),
     ("sp_fault_stat_critical",   "ctStatCriticalFault",               "raw", "0 = none"),
     ("sp_fault_stat_minor",      "ctStatMinorFault",                  "raw", "0 = none"),
+
+    # --- Added after diffing the probe dump against what was being captured.
+    # The thermostat reports 1578 fields; these are the ones that carry live
+    # telemetry we had no equivalent for.
+    ("sp_eev_subcool",           "ctEEVCoilSubCoolValue",             "raw", "subcooling; the charge diagnostic that pairs with superheat"),
+    ("sp_eev_coil_pressure",     "ctEEVCoilPressureSensor",           "raw", "indoor coil pressure; read equal to suction pressure when probed, so capture tells us whether they ever diverge"),
+    ("sp_od_fan_demand_pct",     "ctOutdoorFanRequestedDemandPercentage", "raw", "commanded outdoor fan, %; pairs with the measured RPM"),
+    ("sp_alg_raw_demand",        "ctControlAlgorithmRawDemand",       "raw", "demand before trimming, vs the trimmed cool/dehum demands"),
+    ("sp_aq_outdoor_aqi",        "aqOutdoorValue",                    "raw", "outdoor AQI, the composite behind the particle and ozone figures"),
+    ("sp_filter_days",           "alertMediaAirFilterDays",           "raw", "media filter days counted; rising means elapsed, falling means remaining"),
+    ("sp_filter_days_limit",     "alertMediaAirFilterDaysLimit",      "raw", "media filter service interval, days"),
+    # The thermostat applies a large calibration offset to its own sensor, so
+    # tempIndoor is not what the sensor reads. Storing both makes the offset
+    # visible instead of implicit -- it bears directly on humidity work, since
+    # relative humidity is only meaningful against the temperature it was
+    # measured at.
+    ("sp_tstat_raw_temp",        "sensorRawTemperature",              "raw", "thermostat sensor before calibration, C"),
+    ("sp_tstat_calc_temp",       "TstatCalculatedTemp",               "raw", "thermostat temperature after calibration, C"),
+    ("sp_tstat_temp_offset",     "sensorDynamicAlgorithmTempOffset",  "raw", "calibration offset applied to the raw sensor"),
+    # Only the most recent fault is stored per poll. The boolean fault flags say
+    # something is wrong; the code says what, which is the part you act on.
+    ("sp_fault1_code",           "fault1Code",                        "raw", "most recent fault code"),
+    ("sp_fault1_equipment",      "fault1Equipment",                   "raw", "which unit raised it"),
+    ("sp_fault1_level",          "fault1Level",                       "raw", "severity"),
 ]
 
 # Static per-install config; belongs on devices, not repeated every 5 minutes.
@@ -78,6 +102,10 @@ DEVICE_FIELDS = [
     ("sp_stat_model",         "statModel",              "thermostat model string"),
     ("sp_compressor_min_on",  "compressorMinOn",        "minimum compressor on time, ms"),
     ("sp_compressor_min_off", "compressorMinOff",       "minimum compressor off time, ms"),
+    ("sp_blower_max_cfm",     "ctIFCBlowerMotorMaxCFM", "blower capability, CFM; lets airflow read as % of maximum"),
+    ("sp_indoor_rated_cfm",   "ctIndoorRatedCFM",       "indoor rated CFM"),
+    ("sp_cool_max_rps",       "ctOutdoorCoolMaxRPS",    "configured compressor ceiling, tenths RPS; 730 = 73.0, matching the brief"),
+    ("sp_boost_mode",         "ctOutdoorBoostModeEnable", "boost enable; explains speeds observed above the ceiling"),
 ]
 
 if __name__ == "__main__":

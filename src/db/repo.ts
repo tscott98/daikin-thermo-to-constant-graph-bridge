@@ -37,6 +37,24 @@ export interface Reading extends SkyportFields {
   published: number;
 }
 
+/**
+ * Every column insertReadings writes, in statement order.
+ *
+ * Derived rather than spelled out three times. The previous version listed the
+ * columns, the values, and a hand-counted run of 65 question marks separately,
+ * so adding a field meant editing all three in step and recounting -- and a
+ * miscount binds every later value to the wrong column, which SQLite accepts
+ * without complaint.
+ */
+export const READING_COLUMNS = [
+  'device_id', 'ts', 'temp_indoor_c', 'hum_indoor', 'temp_outdoor_c', 'hum_outdoor',
+  'heat_setpoint_c', 'cool_setpoint_c', 'setpoint_delta_c', 'setpoint_min_c', 'setpoint_max_c',
+  'mode', 'equipment_status', 'fan_circulate', 'fan_circulate_spd', 'schedule_enabled',
+  ...SKYPORT_COLUMNS,
+  'duct_return_temp_f', 'duct_return_rh', 'duct_supply_temp_f',
+  'raw',
+] as const satisfies readonly (keyof Reading)[];
+
 // Reading carries the Skyport columns too; they are null when that poll is
 // skipped or fails, which must never block an integrator reading.
 export type ReadingWithSkyport = Reading & SkyportFields;
@@ -69,6 +87,11 @@ const asStr = (v: unknown): string | null =>
   v === null || v === undefined ? null : String(v);
 
 function rowToReading(r: Row): Reading {
+  // Derived from SKYPORT_COLUMNS rather than listed: the list is already the
+  // source of truth for the schema and the insert, and a column named in one
+  // place but forgotten here reads back as undefined rather than failing.
+  const skyport = {} as SkyportFields;
+  for (const c of SKYPORT_COLUMNS) skyport[c] = asNum(r[c]);
   return {
     device_id: String(r['device_id']),
     ts: asNum(r['ts']) ?? 0,
@@ -86,51 +109,7 @@ function rowToReading(r: Row): Reading {
     fan_circulate: asNum(r['fan_circulate']),
     fan_circulate_spd: asNum(r['fan_circulate_spd']),
     schedule_enabled: asNum(r['schedule_enabled']),
-    sp_outdoor_power: asNum(r['sp_outdoor_power']),
-    sp_indoor_power: asNum(r['sp_indoor_power']),
-    sp_compressor_current: asNum(r['sp_compressor_current']),
-    sp_inverter_current: asNum(r['sp_inverter_current']),
-    sp_od_fan_current: asNum(r['sp_od_fan_current']),
-    sp_compressor_runtime: asNum(r['sp_compressor_runtime']),
-    sp_compressor_rps: asNum(r['sp_compressor_rps']),
-    sp_target_compressor_rps: asNum(r['sp_target_compressor_rps']),
-    sp_frequency_pct: asNum(r['sp_frequency_pct']),
-    sp_cool_demand_pct: asNum(r['sp_cool_demand_pct']),
-    sp_fan_demand_pct: asNum(r['sp_fan_demand_pct']),
-    sp_indoor_airflow: asNum(r['sp_indoor_airflow']),
-    sp_od_fan_rpm: asNum(r['sp_od_fan_rpm']),
-    sp_od_fan_target: asNum(r['sp_od_fan_target']),
-    sp_suction_temp: asNum(r['sp_suction_temp']),
-    sp_discharge_temp: asNum(r['sp_discharge_temp']),
-    sp_od_coil_temp: asNum(r['sp_od_coil_temp']),
-    sp_od_liquid_temp: asNum(r['sp_od_liquid_temp']),
-    sp_suction_pressure: asNum(r['sp_suction_pressure']),
-    sp_eev_opening: asNum(r['sp_eev_opening']),
-    sp_inverter_fin_temp: asNum(r['sp_inverter_fin_temp']),
-    sp_eev_superheat: asNum(r['sp_eev_superheat']),
-    sp_eev_suction_temp: asNum(r['sp_eev_suction_temp']),
-    sp_eev_liquid_temp: asNum(r['sp_eev_liquid_temp']),
-    sp_reversing_valve: asNum(r['sp_reversing_valve']),
-    sp_od_air_temp: asNum(r['sp_od_air_temp']),
-    sp_hum_setpoint: asNum(r['sp_hum_setpoint']),
-    sp_dehum_setpoint: asNum(r['sp_dehum_setpoint']),
-    sp_overcool_amount: asNum(r['sp_overcool_amount']),
-    sp_zone1_damper: asNum(r['sp_zone1_damper']),
-    sp_aq_outdoor_ozone: asNum(r['sp_aq_outdoor_ozone']),
-    sp_aq_outdoor_particles: asNum(r['sp_aq_outdoor_particles']),
-    sp_dehum_demand_pct: asNum(r['sp_dehum_demand_pct']),
-    sp_alg_dehum_demand: asNum(r['sp_alg_dehum_demand']),
-    sp_alg_overcool_demand: asNum(r['sp_alg_overcool_demand']),
-    sp_alg_cool_demand: asNum(r['sp_alg_cool_demand']),
-    sp_requested_airflow: asNum(r['sp_requested_airflow']),
-    sp_fan_actual_pct: asNum(r['sp_fan_actual_pct']),
-    sp_compressor_reduction: asNum(r['sp_compressor_reduction']),
-    sp_fault_od_critical: asNum(r['sp_fault_od_critical']),
-    sp_fault_od_minor: asNum(r['sp_fault_od_minor']),
-    sp_fault_ifc_critical: asNum(r['sp_fault_ifc_critical']),
-    sp_fault_ifc_minor: asNum(r['sp_fault_ifc_minor']),
-    sp_fault_stat_critical: asNum(r['sp_fault_stat_critical']),
-    sp_fault_stat_minor: asNum(r['sp_fault_stat_minor']),
+    ...skyport,
     duct_return_temp_f: asNum(r['duct_return_temp_f']),
     duct_return_rh: asNum(r['duct_return_rh']),
     duct_supply_temp_f: asNum(r['duct_supply_temp_f']),
@@ -192,50 +171,13 @@ export function toReading(
 export async function insertReadings(db: Db, rows: Reading[]): Promise<number> {
   if (rows.length === 0) return 0;
 
-  const sql = `INSERT OR IGNORE INTO readings (
-      device_id, ts, temp_indoor_c, hum_indoor, temp_outdoor_c, hum_outdoor,
-      heat_setpoint_c, cool_setpoint_c, setpoint_delta_c, setpoint_min_c, setpoint_max_c,
-      mode, equipment_status,
-      fan_circulate, fan_circulate_spd, schedule_enabled,
-      sp_outdoor_power, sp_indoor_power, sp_compressor_current, sp_inverter_current,
-      sp_od_fan_current, sp_compressor_runtime, sp_compressor_rps, sp_target_compressor_rps,
-      sp_frequency_pct, sp_cool_demand_pct, sp_fan_demand_pct, sp_indoor_airflow,
-      sp_od_fan_rpm, sp_od_fan_target, sp_suction_temp, sp_discharge_temp,
-      sp_od_coil_temp, sp_od_liquid_temp, sp_suction_pressure, sp_eev_opening,
-      sp_inverter_fin_temp, sp_eev_superheat, sp_eev_suction_temp, sp_eev_liquid_temp,
-      sp_reversing_valve, sp_od_air_temp, sp_hum_setpoint, sp_dehum_setpoint,
-      sp_overcool_amount, sp_zone1_damper, sp_aq_outdoor_ozone, sp_aq_outdoor_particles,
-      sp_dehum_demand_pct, sp_alg_dehum_demand, sp_alg_overcool_demand, sp_alg_cool_demand,
-      sp_requested_airflow, sp_fan_actual_pct, sp_compressor_reduction, sp_fault_od_critical,
-      sp_fault_od_minor, sp_fault_ifc_critical, sp_fault_ifc_minor, sp_fault_stat_critical,
-      sp_fault_stat_minor,
-      duct_return_temp_f, duct_return_rh, duct_supply_temp_f,
-      raw, published
-    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,0)`;
+  const cols = READING_COLUMNS;
+  const sql = `INSERT OR IGNORE INTO readings (${cols.join(', ')}, published)`
+    + ` VALUES (${cols.map(() => '?').join(',')},0)`;
 
   const statements: InStatement[] = rows.map((r) => ({
     sql,
-    args: [
-      r.device_id, r.ts, r.temp_indoor_c, r.hum_indoor, r.temp_outdoor_c, r.hum_outdoor,
-      r.heat_setpoint_c, r.cool_setpoint_c,
-      r.setpoint_delta_c, r.setpoint_min_c, r.setpoint_max_c,
-      r.mode, r.equipment_status,
-      r.fan_circulate, r.fan_circulate_spd, r.schedule_enabled,
-      r.sp_outdoor_power, r.sp_indoor_power, r.sp_compressor_current, r.sp_inverter_current,
-      r.sp_od_fan_current, r.sp_compressor_runtime, r.sp_compressor_rps, r.sp_target_compressor_rps,
-      r.sp_frequency_pct, r.sp_cool_demand_pct, r.sp_fan_demand_pct, r.sp_indoor_airflow,
-      r.sp_od_fan_rpm, r.sp_od_fan_target, r.sp_suction_temp, r.sp_discharge_temp,
-      r.sp_od_coil_temp, r.sp_od_liquid_temp, r.sp_suction_pressure, r.sp_eev_opening,
-      r.sp_inverter_fin_temp, r.sp_eev_superheat, r.sp_eev_suction_temp, r.sp_eev_liquid_temp,
-      r.sp_reversing_valve, r.sp_od_air_temp, r.sp_hum_setpoint, r.sp_dehum_setpoint,
-      r.sp_overcool_amount, r.sp_zone1_damper, r.sp_aq_outdoor_ozone, r.sp_aq_outdoor_particles,
-      r.sp_dehum_demand_pct, r.sp_alg_dehum_demand, r.sp_alg_overcool_demand, r.sp_alg_cool_demand,
-      r.sp_requested_airflow, r.sp_fan_actual_pct, r.sp_compressor_reduction, r.sp_fault_od_critical,
-      r.sp_fault_od_minor, r.sp_fault_ifc_critical, r.sp_fault_ifc_minor, r.sp_fault_stat_critical,
-      r.sp_fault_stat_minor,
-      r.duct_return_temp_f, r.duct_return_rh, r.duct_supply_temp_f,
-      r.raw,
-    ],
+    args: cols.map((c) => (r[c] ?? null) as string | number | null),
   }));
 
   const results = await db.batch(statements, 'write');
@@ -594,18 +536,43 @@ function capacityClause(): string[] {
  * makes that comparison direct -- two sensors, one temperature-independent
  * quantity, so any disagreement is real rather than a thermometer artefact.
  */
+/**
+ * Pollutants where a bucket's peak matters as much as its mean.
+ *
+ * A five-minute cooking spike averaged across a fifteen-minute bucket is the
+ * event disappearing into the number that made it interesting -- and the wider
+ * the zoom, the more it vanishes. But the mean is still what air quality
+ * standards are written against (PM2.5 over 24 hours, ozone over 8), so it is
+ * not the wrong statistic, just an incomplete one.
+ *
+ * Both ship: AVG under the plain name, MAX under _max. Temperature, humidity
+ * and CO2-derived moisture are not here because they physically cannot step
+ * within a bucket the way a particle count can.
+ */
+const AIR_SPIKY: ReadonlyArray<readonly [col: string, alias: string, dp: number]> = [
+  ['co2', 'ag_co2', 0],
+  ['pm02', 'ag_pm02', 1],
+  ['pm01', 'ag_pm01', 1],
+  ['pm10', 'ag_pm10', 1],
+  ['tvoc_index', 'ag_tvoc_index', 0],
+  ['nox_index', 'ag_nox_index', 0],
+];
+
+/** Mean and peak for each spiky pollutant. `q` qualifies the table, if needed. */
+function airSpikySelects(q = ''): string[] {
+  return AIR_SPIKY.flatMap(([col, alias, dp]) => [
+    `ROUND(AVG(${q}${col}), ${dp}) AS ${alias}`,
+    `ROUND(MAX(${q}${col}), ${dp}) AS ${alias}_max`,
+  ]);
+}
+
 function airGradientClause(): string[] {
   const w = humidityRatioSql('aq.temp_c', 'aq.rh');
   return [
     `ROUND(AVG(aq.temp_c) * 9.0 / 5.0 + 32.0, 1) AS ag_temp_f`,
     `ROUND(AVG(aq.rh), 1) AS ag_rh`,
     `ROUND(AVG(${w}), 1) AS ag_w_gr`,
-    `ROUND(AVG(aq.co2), 0) AS ag_co2`,
-    `ROUND(AVG(aq.pm02), 1) AS ag_pm02`,
-    `ROUND(AVG(aq.pm01), 1) AS ag_pm01`,
-    `ROUND(AVG(aq.pm10), 1) AS ag_pm10`,
-    `ROUND(AVG(aq.tvoc_index), 0) AS ag_tvoc_index`,
-    `ROUND(AVG(aq.nox_index), 0) AS ag_nox_index`,
+    ...airSpikySelects('aq.'),
   ];
 }
 
@@ -623,15 +590,26 @@ export function psychroClause(): string[] {
   ];
 }
 
+/**
+ * Outdoor air quality, which spikes like its indoor counterpart. Gets the same
+ * mean-and-peak treatment so the indoor/outdoor comparison is like for like:
+ * charting an indoor peak against an outdoor average would make filtration
+ * look worse than it is.
+ */
+const SKYPORT_SPIKY = new Set(['sp_aq_outdoor_ozone', 'sp_aq_outdoor_particles']);
+
 export function skyportSelectClause(): string[] {
-  return SKYPORT_COLUMNS.map((c) => {
-    if (SKYPORT_MAX_COLUMNS.has(c)) return `MAX(${c}) AS ${c}`;
+  return SKYPORT_COLUMNS.flatMap((c) => {
+    if (SKYPORT_MAX_COLUMNS.has(c)) return [`MAX(${c}) AS ${c}`];
     // Suffixes carry the unit into the column name, so a Grafana legend says
     // what it is showing without the reader consulting this file.
-    if (SKYPORT_UNCALIBRATED.has(c)) return `ROUND(AVG(${c}), 2) AS ${c}_raw`;
-    if (SKYPORT_TENTHS_F.has(c)) return `ROUND(AVG(${c}) / 10.0, 1) AS ${c}_f`;
-    if (SKYPORT_DECIAMPS.has(c)) return `ROUND(AVG(${c}) / 10.0, 2) AS ${c}_a`;
-    return `ROUND(AVG(${c}), 2) AS ${c}`;
+    if (SKYPORT_UNCALIBRATED.has(c)) return [`ROUND(AVG(${c}), 2) AS ${c}_raw`];
+    if (SKYPORT_TENTHS_F.has(c)) return [`ROUND(AVG(${c}) / 10.0, 1) AS ${c}_f`];
+    if (SKYPORT_DECIAMPS.has(c)) return [`ROUND(AVG(${c}) / 10.0, 2) AS ${c}_a`];
+    if (SKYPORT_SPIKY.has(c)) {
+      return [`ROUND(AVG(${c}), 2) AS ${c}`, `ROUND(MAX(${c}), 2) AS ${c}_max`];
+    }
+    return [`ROUND(AVG(${c}), 2) AS ${c}`];
   });
 }
 
@@ -805,12 +783,7 @@ export function buildAirSelects(): string[] {
     `ROUND(AVG(temp_c) * 9.0 / 5.0 + 32.0, 1) AS ag_temp_f`,
     `ROUND(AVG(rh), 1) AS ag_rh`,
     `ROUND(AVG(${w}), 1) AS ag_w_gr`,
-    `ROUND(AVG(co2), 0) AS ag_co2`,
-    `ROUND(AVG(pm02), 1) AS ag_pm02`,
-    `ROUND(AVG(pm01), 1) AS ag_pm01`,
-    `ROUND(AVG(pm10), 1) AS ag_pm10`,
-    `ROUND(AVG(tvoc_index), 0) AS ag_tvoc_index`,
-    `ROUND(AVG(nox_index), 0) AS ag_nox_index`,
+    ...airSpikySelects(),
   ];
 }
 

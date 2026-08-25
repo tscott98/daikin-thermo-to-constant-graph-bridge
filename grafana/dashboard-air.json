@@ -94,7 +94,7 @@
         "type": "yesoreyeram-infinity-datasource",
         "uid": "${DS_INFINITY}"
       },
-      "description": "Outdoor air is about 420 ppm, so the excess over that is your own breath accumulating. Below 800 is comfortable; above 1200 has measurable effects on concentration. It doubles as an occupancy signal, which is what separates moisture generated indoors from moisture leaking in.",
+      "description": "Outdoor air is about 420 ppm, so the excess over that is your own breath accumulating. Below 800 is comfortable; above 1200 has measurable effects on concentration. It doubles as an occupancy signal, which is what separates moisture generated indoors from moisture leaking in. The solid line is the bucket mean and the faint one its peak; at wide zoom they separate whenever a short excursion is being averaged down.",
       "gridPos": {
         "h": 9,
         "w": 12,
@@ -112,7 +112,7 @@
           "source": "url",
           "parser": "backend",
           "format": "timeseries",
-          "url": "/api/air?from=$__from&to=$__to&interval=$__interval_ms&fields=ag_co2",
+          "url": "/api/air?from=$__from&to=$__to&interval=$__interval_ms&fields=ag_co2,ag_co2_max",
           "url_options": {
             "method": "GET"
           },
@@ -126,6 +126,11 @@
             {
               "selector": "ag_co2",
               "text": "CO2",
+              "type": "number"
+            },
+            {
+              "selector": "ag_co2_max",
+              "text": "CO2 peak",
               "type": "number"
             }
           ],
@@ -141,6 +146,39 @@
           }
         },
         "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "CO2 peak"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "semi-dark-blue"
+                }
+              },
+              {
+                "id": "custom.lineWidth",
+                "value": 1
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 0
+              },
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dash",
+                  "dash": [
+                    6,
+                    4
+                  ]
+                }
+              }
+            ]
+          },
           {
             "matcher": {
               "id": "byName",
@@ -209,7 +247,7 @@
         "type": "yesoreyeram-infinity-datasource",
         "uid": "${DS_INFINITY}"
       },
-      "description": "The gap between the lines is filtration doing its job. Indoor tracking outdoor closely would mean particulates arrive faster than the filter removes them. The two come from different sensors on different scales, so compare shapes rather than subtracting.",
+      "description": "The gap between the lines is filtration doing its job. Indoor tracking outdoor closely would mean particulates arrive faster than the filter removes them. The two come from different sensors on different scales, so compare shapes rather than subtracting. Indoor shows mean and peak; a peak that rises while the mean stays flat is a brief indoor source rather than a filtration problem.",
       "gridPos": {
         "h": 9,
         "w": 12,
@@ -227,7 +265,7 @@
           "source": "url",
           "parser": "backend",
           "format": "timeseries",
-          "url": "/api/series?from=$__from&to=$__to&interval=$__interval_ms&device=$device&fields=ag_pm02,sp_aq_outdoor_particles",
+          "url": "/api/series?from=$__from&to=$__to&interval=$__interval_ms&device=$device&fields=ag_pm02,ag_pm02_max,sp_aq_outdoor_particles",
           "url_options": {
             "method": "GET"
           },
@@ -241,6 +279,11 @@
             {
               "selector": "ag_pm02",
               "text": "Indoor PM2.5",
+              "type": "number"
+            },
+            {
+              "selector": "ag_pm02_max",
+              "text": "Indoor peak",
               "type": "number"
             },
             {
@@ -303,6 +346,39 @@
           {
             "matcher": {
               "id": "byName",
+              "options": "Indoor peak"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "semi-dark-blue"
+                }
+              },
+              {
+                "id": "custom.lineWidth",
+                "value": 1
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 0
+              },
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dash",
+                  "dash": [
+                    6,
+                    4
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
               "options": "Outdoor particulates"
             },
             "properties": [
@@ -337,7 +413,7 @@
         "type": "yesoreyeram-infinity-datasource",
         "uid": "${DS_INFINITY}"
       },
-      "description": "PM1 rising while PM2.5 stays flat suggests combustion or cooking. PM10 moving alone suggests dust, or activity stirring up settled material.",
+      "description": "Bucket peaks, not means: these are event detectors, and a five-minute cooking spike averaged across a wide bucket disappears into the number that made it worth plotting. PM1 rising while PM2.5 stays flat suggests combustion or cooking. PM10 moving alone suggests dust, or activity stirring up settled material.",
       "gridPos": {
         "h": 8,
         "w": 12,
@@ -355,7 +431,7 @@
           "source": "url",
           "parser": "backend",
           "format": "timeseries",
-          "url": "/api/air?from=$__from&to=$__to&interval=$__interval_ms&fields=ag_pm01,ag_pm02,ag_pm10",
+          "url": "/api/air?from=$__from&to=$__to&interval=$__interval_ms&fields=ag_pm01_max,ag_pm02_max,ag_pm10_max",
           "url_options": {
             "method": "GET"
           },
@@ -367,17 +443,17 @@
               "type": "timestamp"
             },
             {
-              "selector": "ag_pm01",
+              "selector": "ag_pm01_max",
               "text": "PM1",
               "type": "number"
             },
             {
-              "selector": "ag_pm02",
+              "selector": "ag_pm02_max",
               "text": "PM2.5",
               "type": "number"
             },
             {
-              "selector": "ag_pm10",
+              "selector": "ag_pm10_max",
               "text": "PM10",
               "type": "number"
             }
@@ -461,7 +537,7 @@
         "type": "yesoreyeram-infinity-datasource",
         "uid": "${DS_INFINITY}"
       },
-      "description": "Sensor indices, not concentrations: 100 is the running baseline for this room, so excursions mark a change rather than an absolute level. Useful for spotting cleaning products, cooking, or off-gassing.",
+      "description": "Bucket peaks, for the same reason as the particle panel. Sensor indices, not concentrations: 100 is the running baseline for this room, so excursions mark a change rather than an absolute level. Useful for spotting cleaning products, cooking, or off-gassing.",
       "gridPos": {
         "h": 8,
         "w": 12,
@@ -479,7 +555,7 @@
           "source": "url",
           "parser": "backend",
           "format": "timeseries",
-          "url": "/api/air?from=$__from&to=$__to&interval=$__interval_ms&fields=ag_tvoc_index,ag_nox_index",
+          "url": "/api/air?from=$__from&to=$__to&interval=$__interval_ms&fields=ag_tvoc_index_max,ag_nox_index_max",
           "url_options": {
             "method": "GET"
           },
@@ -491,12 +567,12 @@
               "type": "timestamp"
             },
             {
-              "selector": "ag_tvoc_index",
+              "selector": "ag_tvoc_index_max",
               "text": "TVOC index",
               "type": "number"
             },
             {
-              "selector": "ag_nox_index",
+              "selector": "ag_nox_index_max",
               "text": "NOx index",
               "type": "number"
             }

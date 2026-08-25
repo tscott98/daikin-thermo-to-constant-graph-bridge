@@ -64,6 +64,19 @@ export interface SkyportFields {
   sp_fault_ifc_minor: number | null;
   sp_fault_stat_critical: number | null;
   sp_fault_stat_minor: number | null;
+  sp_eev_subcool: number | null;
+  sp_eev_coil_pressure: number | null;
+  sp_od_fan_demand_pct: number | null;
+  sp_alg_raw_demand: number | null;
+  sp_aq_outdoor_aqi: number | null;
+  sp_filter_days: number | null;
+  sp_filter_days_limit: number | null;
+  sp_tstat_raw_temp: number | null;
+  sp_tstat_calc_temp: number | null;
+  sp_tstat_temp_offset: number | null;
+  sp_fault1_code: number | null;
+  sp_fault1_equipment: number | null;
+  sp_fault1_level: number | null;
 }
 
 export const EMPTY_SKYPORT: SkyportFields = {
@@ -112,6 +125,19 @@ export const EMPTY_SKYPORT: SkyportFields = {
   sp_fault_ifc_minor: null,
   sp_fault_stat_critical: null,
   sp_fault_stat_minor: null,
+  sp_eev_subcool: null,
+  sp_eev_coil_pressure: null,
+  sp_od_fan_demand_pct: null,
+  sp_alg_raw_demand: null,
+  sp_aq_outdoor_aqi: null,
+  sp_filter_days: null,
+  sp_filter_days_limit: null,
+  sp_tstat_raw_temp: null,
+  sp_tstat_calc_temp: null,
+  sp_tstat_temp_offset: null,
+  sp_fault1_code: null,
+  sp_fault1_equipment: null,
+  sp_fault1_level: null,
 };
 
 export function skyportFields(d: SkyportDeviceData): SkyportFields {
@@ -206,6 +232,32 @@ export function skyportFields(d: SkyportDeviceData): SkyportFields {
     sp_fault_stat_critical: plain(d.ctStatCriticalFault),
     // 0 = none
     sp_fault_stat_minor: plain(d.ctStatMinorFault),
+    // subcooling; the charge diagnostic that pairs with superheat
+    sp_eev_subcool: plain(d.ctEEVCoilSubCoolValue),
+    // indoor coil pressure; read equal to suction pressure when probed, so capture tells us whether they ever diverge
+    sp_eev_coil_pressure: plain(d.ctEEVCoilPressureSensor),
+    // commanded outdoor fan, %; pairs with the measured RPM
+    sp_od_fan_demand_pct: plain(d.ctOutdoorFanRequestedDemandPercentage),
+    // demand before trimming, vs the trimmed cool/dehum demands
+    sp_alg_raw_demand: plain(d.ctControlAlgorithmRawDemand),
+    // outdoor AQI, the composite behind the particle and ozone figures
+    sp_aq_outdoor_aqi: plain(d.aqOutdoorValue),
+    // media filter days counted; rising means elapsed, falling means remaining
+    sp_filter_days: plain(d.alertMediaAirFilterDays),
+    // media filter service interval, days
+    sp_filter_days_limit: plain(d.alertMediaAirFilterDaysLimit),
+    // thermostat sensor before calibration, C
+    sp_tstat_raw_temp: plain(d.sensorRawTemperature),
+    // thermostat temperature after calibration, C
+    sp_tstat_calc_temp: plain(d.TstatCalculatedTemp),
+    // calibration offset applied to the raw sensor
+    sp_tstat_temp_offset: plain(d.sensorDynamicAlgorithmTempOffset),
+    // most recent fault code
+    sp_fault1_code: plain(d.fault1Code),
+    // which unit raised it
+    sp_fault1_equipment: plain(d.fault1Equipment),
+    // severity
+    sp_fault1_level: plain(d.fault1Level),
   };
 }
 
@@ -255,6 +307,19 @@ export const SKYPORT_COLUMNS: readonly (keyof SkyportFields)[] = [
   'sp_fault_ifc_minor',
   'sp_fault_stat_critical',
   'sp_fault_stat_minor',
+  'sp_eev_subcool',
+  'sp_eev_coil_pressure',
+  'sp_od_fan_demand_pct',
+  'sp_alg_raw_demand',
+  'sp_aq_outdoor_aqi',
+  'sp_filter_days',
+  'sp_filter_days_limit',
+  'sp_tstat_raw_temp',
+  'sp_tstat_calc_temp',
+  'sp_tstat_temp_offset',
+  'sp_fault1_code',
+  'sp_fault1_equipment',
+  'sp_fault1_level',
 ] as const;
 
 export { SENTINELS };
