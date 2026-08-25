@@ -22,9 +22,17 @@ AIR_URL = "/api/air?from=$__from&to=$__to&interval=$__interval_ms"
 def target(columns, url=BASE_URL, fmt="timeseries"):
     """One Infinity query. Columns must be declared explicitly for the backend
     parser; it will not infer them, and a missing time column is the usual
-    cause of 'Data is missing a time field'."""
+    cause of 'Data is missing a time field'.
+
+    A series row carries about 88 columns and the average panel charts three,
+    so each query names the ones it wants. The values are identical either
+    way -- the rest are simply not computed or sent, which is what keeps the
+    Worker inside its CPU budget as history accumulates.
+    """
     cols = [{"selector": "time", "text": "time", "type": "timestamp"}] if fmt == "timeseries" else []
     cols += [{"selector": s, "text": t, "type": "number"} for s, t in columns]
+    if "/api/series" in url or "/api/air" in url:
+        url += "&fields=" + ",".join(s for s, _ in columns)
     return [{
         "refId": "A", "datasource": DS, "type": "json", "source": "url",
         "parser": "backend", "format": fmt, "url": url,

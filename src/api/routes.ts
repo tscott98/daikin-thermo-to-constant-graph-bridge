@@ -175,6 +175,7 @@ async function route(request: Request, env: Env): Promise<Response> {
     const rows = await getAirSeries(db, {
       fromTs: opts.fromTs, toTs: opts.toTs,
       bucketSec: opts.bucketSec, limit: opts.limit,
+      fields: opts.fields,
     });
     return json(rows.map(toPoint), 200, false);
   }
@@ -194,6 +195,7 @@ async function route(request: Request, env: Env): Promise<Response> {
       ...opts,
       ratePerKwh: opts.ratePerKwh > 0 ? opts.ratePerKwh : settings.ratePerKwh,
       sampleIntervalSec: settings.pollIntervalMin * 60,
+      fields: opts.fields,
     });
 
     // Both 'time' and 'ts_ms' so Infinity can use whichever it parses more happily.

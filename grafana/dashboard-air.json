@@ -112,7 +112,7 @@
           "source": "url",
           "parser": "backend",
           "format": "timeseries",
-          "url": "/api/air?from=$__from&to=$__to&interval=$__interval_ms",
+          "url": "/api/air?from=$__from&to=$__to&interval=$__interval_ms&fields=ag_co2",
           "url_options": {
             "method": "GET"
           },
@@ -227,7 +227,7 @@
           "source": "url",
           "parser": "backend",
           "format": "timeseries",
-          "url": "/api/series?from=$__from&to=$__to&interval=$__interval_ms&device=$device",
+          "url": "/api/series?from=$__from&to=$__to&interval=$__interval_ms&device=$device&fields=ag_pm02,sp_aq_outdoor_particles",
           "url_options": {
             "method": "GET"
           },
@@ -355,7 +355,7 @@
           "source": "url",
           "parser": "backend",
           "format": "timeseries",
-          "url": "/api/air?from=$__from&to=$__to&interval=$__interval_ms",
+          "url": "/api/air?from=$__from&to=$__to&interval=$__interval_ms&fields=ag_pm01,ag_pm02,ag_pm10",
           "url_options": {
             "method": "GET"
           },
@@ -479,7 +479,7 @@
           "source": "url",
           "parser": "backend",
           "format": "timeseries",
-          "url": "/api/air?from=$__from&to=$__to&interval=$__interval_ms",
+          "url": "/api/air?from=$__from&to=$__to&interval=$__interval_ms&fields=ag_tvoc_index,ag_nox_index",
           "url_options": {
             "method": "GET"
           },
@@ -583,7 +583,7 @@
           "source": "url",
           "parser": "backend",
           "format": "timeseries",
-          "url": "/api/series?from=$__from&to=$__to&interval=$__interval_ms&device=$device",
+          "url": "/api/series?from=$__from&to=$__to&interval=$__interval_ms&device=$device&fields=sp_aq_outdoor_ozone",
           "url_options": {
             "method": "GET"
           },
@@ -694,7 +694,7 @@
           "source": "url",
           "parser": "backend",
           "format": "timeseries",
-          "url": "/api/series?from=$__from&to=$__to&interval=$__interval_ms&device=$device",
+          "url": "/api/series?from=$__from&to=$__to&interval=$__interval_ms&device=$device&fields=ag_temp_f,indoor_f,ag_rh,hum_indoor",
           "url_options": {
             "method": "GET"
           },
@@ -862,7 +862,7 @@
           "source": "url",
           "parser": "backend",
           "format": "timeseries",
-          "url": "/api/air?from=$__from&to=$__to&interval=$__interval_ms",
+          "url": "/api/air?from=$__from&to=$__to&interval=$__interval_ms&fields=ag_temp_f,ag_rh,ag_w_gr",
           "url_options": {
             "method": "GET"
           },

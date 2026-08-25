@@ -112,7 +112,7 @@
           "source": "url",
           "parser": "backend",
           "format": "timeseries",
-          "url": "/api/series?from=$__from&to=$__to&interval=$__interval_ms&device=$device",
+          "url": "/api/series?from=$__from&to=$__to&interval=$__interval_ms&device=$device&fields=sp_outdoor_power",
           "url_options": {
             "method": "GET"
           },
@@ -196,7 +196,7 @@
           "source": "url",
           "parser": "backend",
           "format": "timeseries",
-          "url": "/api/series?from=$__from&to=$__to&interval=$__interval_ms&device=$device",
+          "url": "/api/series?from=$__from&to=$__to&interval=$__interval_ms&device=$device&fields=compressor_runtime_delta",
           "url_options": {
             "method": "GET"
           },
@@ -284,7 +284,7 @@
           "source": "url",
           "parser": "backend",
           "format": "table",
-          "url": "/api/series?from=$__from&to=$__to&interval=3600&device=$device",
+          "url": "/api/series?from=$__from&to=$__to&interval=3600&device=$device&fields=outdoor_f,sp_outdoor_power",
           "url_options": {
             "method": "GET"
           },
@@ -387,7 +387,7 @@
           "source": "url",
           "parser": "backend",
           "format": "table",
-          "url": "/api/series?from=$__from&to=$__to&interval=3600&device=$device",
+          "url": "/api/series?from=$__from&to=$__to&interval=3600&device=$device&fields=outdoor_f,sp_compressor_rps",
           "url_options": {
             "method": "GET"
           },
@@ -478,7 +478,7 @@
           "source": "url",
           "parser": "backend",
           "format": "timeseries",
-          "url": "/api/series?from=$__from&to=$__to&interval=$__interval_ms&device=$device",
+          "url": "/api/series?from=$__from&to=$__to&interval=$__interval_ms&device=$device&fields=energy_kwh,cost",
           "url_options": {
             "method": "GET"
           },
@@ -606,7 +606,7 @@
           "source": "url",
           "parser": "backend",
           "format": "timeseries",
-          "url": "/api/series?from=$__from&to=$__to&interval=$__interval_ms&device=$device",
+          "url": "/api/series?from=$__from&to=$__to&interval=$__interval_ms&device=$device&fields=cost",
           "url_options": {
             "method": "GET"
           },
@@ -677,7 +677,7 @@
           "source": "url",
           "parser": "backend",
           "format": "timeseries",
-          "url": "/api/series?from=$__from&to=$__to&interval=$__interval_ms&device=$device",
+          "url": "/api/series?from=$__from&to=$__to&interval=$__interval_ms&device=$device&fields=sp_compressor_rps,sp_target_compressor_rps,sp_frequency_pct",
           "url_options": {
             "method": "GET"
           },

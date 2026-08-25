@@ -388,6 +388,11 @@ export interface SeriesOptions {
   ratePerKwh?: number | undefined;
   /** Seconds each sample represents, for the energy integral. */
   sampleIntervalSec?: number | undefined;
+  /**
+   * Output columns to compute, or undefined for all. Values are unchanged
+   * either way; this only decides how many of them are worked out and sent.
+   */
+  fields?: Set<string> | undefined;
 }
 
 /**
@@ -541,7 +546,7 @@ function r410aSatFSql(psig: string): string {
  * gain makes the split read small, and CFM is the equipment's own figure rather
  * than measured airflow.
  */
-function capacityClause(): string {
+function capacityClause(): string[] {
   const rtC = '(duct_return_temp_f - 32.0) * 5.0 / 9.0';
   const stC = '(duct_supply_temp_f - 32.0) * 5.0 / 9.0';
   const returnW = humidityRatioSql(`(${rtC})`, 'duct_return_rh');
@@ -577,7 +582,7 @@ function capacityClause(): string {
                     THEN (${sensible}) / ((${sensible}) + (${latent})) END), 3) AS shr_est`,
     `ROUND(AVG(CASE WHEN sp_outdoor_power > 100
                     THEN ((${sensible}) + (${latent})) / sp_outdoor_power END), 2) AS eer_est`,
-  ].join(',\n            ');
+  ];
 }
 
 /**
@@ -589,7 +594,7 @@ function capacityClause(): string {
  * makes that comparison direct -- two sensors, one temperature-independent
  * quantity, so any disagreement is real rather than a thermometer artefact.
  */
-function airGradientClause(): string {
+function airGradientClause(): string[] {
   const w = humidityRatioSql('aq.temp_c', 'aq.rh');
   return [
     `ROUND(AVG(aq.temp_c) * 9.0 / 5.0 + 32.0, 1) AS ag_temp_f`,
@@ -601,10 +606,10 @@ function airGradientClause(): string {
     `ROUND(AVG(aq.pm10), 1) AS ag_pm10`,
     `ROUND(AVG(aq.tvoc_index), 0) AS ag_tvoc_index`,
     `ROUND(AVG(aq.nox_index), 0) AS ag_nox_index`,
-  ].join(',\n            ');
+  ];
 }
 
-export function psychroClause(): string {
+export function psychroClause(): string[] {
   const inW = humidityRatioSql('temp_indoor_c', 'hum_indoor');
   const outW = humidityRatioSql('temp_outdoor_c', 'hum_outdoor');
   const sat = r410aSatFSql('sp_suction_pressure');
@@ -615,10 +620,10 @@ export function psychroClause(): string {
     `ROUND(AVG(${dewPointFSql('temp_outdoor_c', 'hum_outdoor')}), 1) AS outdoor_dewpoint_f`,
     `ROUND(AVG(CASE WHEN sp_compressor_rps > 5
                     THEN sp_eev_suction_temp / 10.0 - (${sat}) END), 1) AS superheat_f`,
-  ].join(',\n            ');
+  ];
 }
 
-export function skyportSelectClause(): string {
+export function skyportSelectClause(): string[] {
   return SKYPORT_COLUMNS.map((c) => {
     if (SKYPORT_MAX_COLUMNS.has(c)) return `MAX(${c}) AS ${c}`;
     // Suffixes carry the unit into the column name, so a Grafana legend says
@@ -627,7 +632,7 @@ export function skyportSelectClause(): string {
     if (SKYPORT_TENTHS_F.has(c)) return `ROUND(AVG(${c}) / 10.0, 1) AS ${c}_f`;
     if (SKYPORT_DECIAMPS.has(c)) return `ROUND(AVG(${c}) / 10.0, 2) AS ${c}_a`;
     return `ROUND(AVG(${c}), 2) AS ${c}`;
-  }).join(',\n            ');
+  });
 }
 
 /**
@@ -655,12 +660,47 @@ export function skyportSelectClause(): string {
  * including it would add a confident-looking number of unknown magnitude to
  * every cost figure. The blower is genuinely missing from these totals.
  */
-function energyClause(sampleSec: number, rate: number): string {
+function energyClause(sampleSec: number, rate: number): string[] {
   const hours = `(COUNT(sp_outdoor_power) * ${sampleSec} / 3600.0)`;
   const kwh = `ROUND(AVG(sp_outdoor_power) * ${hours} / 1000.0, 4)`;
   const cost = rate > 0 ? `ROUND(${kwh} * ${rate}, 4)` : 'NULL';
-  return `${kwh} AS energy_kwh,
-            ${cost} AS cost`;
+  return [`${kwh} AS energy_kwh`, `${cost} AS cost`];
+}
+
+/** The output name a select expression binds to, i.e. its trailing alias. */
+export function aliasOf(expr: string): string | null {
+  return /\bAS\s+([A-Za-z_]\w*)\s*$/.exec(expr)?.[1] ?? null;
+}
+
+/**
+ * Every optional column of a series row, one expression per element.
+ *
+ * Split out from getSeries so it can be filtered by alias and asserted against
+ * directly. device_id, ts and samples are not here: they identify and time the
+ * row and always ship, whatever the caller asked for.
+ */
+export function buildSelects(sampleSec = 300, rate = 0, bucket = 300): string[] {
+  return [
+    `ROUND(AVG(temp_indoor_c)   * 9 / 5 + 32, 2) AS indoor_f`,
+    `ROUND(AVG(temp_outdoor_c)  * 9 / 5 + 32, 2) AS outdoor_f`,
+    `ROUND(AVG(heat_setpoint_c) * 9 / 5 + 32, 2) AS heat_setpoint_f`,
+    `ROUND(AVG(cool_setpoint_c) * 9 / 5 + 32, 2) AS cool_setpoint_f`,
+    `ROUND(AVG(hum_indoor), 1) AS hum_indoor`,
+    `ROUND(AVG(hum_outdoor), 1) AS hum_outdoor`,
+    `ROUND((AVG(temp_indoor_c) - AVG(temp_outdoor_c)) * 9 / 5, 2) AS delta_f`,
+    `MAX(mode) AS mode`,
+    `MAX(equipment_status) AS equipment_status`,
+    `SUM(CASE WHEN equipment_status = 3       THEN 5 ELSE 0 END) AS runtime_heat_min`,
+    `SUM(CASE WHEN equipment_status IN (1, 2) THEN 5 ELSE 0 END) AS runtime_cool_min`,
+    `ROUND(AVG(CASE WHEN equipment_status IN (1,2,3) THEN 1.0 ELSE 0.0 END) * 100, 1) AS pct_running`,
+    ...skyportSelectClause(),
+    `MAX(sp_compressor_runtime) - LAG(MAX(sp_compressor_runtime))`
+      + ` OVER (PARTITION BY r.device_id ORDER BY (r.ts / ${bucket})) AS compressor_runtime_delta`,
+    ...energyClause(sampleSec, rate),
+    ...psychroClause(),
+    ...capacityClause(),
+    ...airGradientClause(),
+  ];
 }
 
 export async function getSeries(db: Db, o: SeriesOptions): Promise<Row[]> {
@@ -669,47 +709,39 @@ export async function getSeries(db: Db, o: SeriesOptions): Promise<Row[]> {
   const rate = Number.isFinite(o.ratePerKwh) && (o.ratePerKwh ?? 0) > 0 ? (o.ratePerKwh as number) : 0;
   const where = ['r.ts >= ?', 'r.ts <= ?'];
 
-  // Placeholders bind by position in the statement text, not by logical order,
-  // so these must follow the order the ? marks appear when reading the SQL top
-  // to bottom: the two bucket divisions in the SELECT list, the bucket inside
-  // the window's ORDER BY, then the WHERE terms, then GROUP BY and LIMIT.
-  const args: Array<string | number> = [bucket, bucket, bucket, o.fromTs, o.toTs];
-
+  // The bucket is interpolated rather than bound. It has already been forced to
+  // a positive integer above, so it cannot carry SQL, and keeping it out of the
+  // parameter list means the select list holds no placeholders at all. That
+  // matters because parameters bind by position in the statement text: while
+  // the bucket was bound, dropping a column from the select list would silently
+  // shift every later argument onto the wrong slot.
+  const args: Array<string | number> = [o.fromTs, o.toTs];
   if (o.deviceId) {
     where.push('r.device_id = ?');
     args.push(o.deviceId);
   }
-  args.push(bucket, o.limit);
+  args.push(o.limit);
+
+  const selects = buildSelects(sampleSec, rate, bucket);
+
+  // device_id, ts and samples always ship: they identify and time the row, and
+  // samples is how a panel tells "system off" from "collection broken".
+  const wanted = o.fields
+    ? selects.filter((e) => {
+      const a = aliasOf(e);
+      return a !== null && o.fields!.has(a);
+    })
+    : selects;
 
   const res = await db.execute({
     sql: `SELECT
             r.device_id,
-            (r.ts / ?) * ?                                            AS ts,
-            COUNT(*)                                                AS samples,
-            ROUND(AVG(temp_indoor_c)   * 9 / 5 + 32, 2)             AS indoor_f,
-            ROUND(AVG(temp_outdoor_c)  * 9 / 5 + 32, 2)             AS outdoor_f,
-            ROUND(AVG(heat_setpoint_c) * 9 / 5 + 32, 2)             AS heat_setpoint_f,
-            ROUND(AVG(cool_setpoint_c) * 9 / 5 + 32, 2)             AS cool_setpoint_f,
-            ROUND(AVG(hum_indoor), 1)                               AS hum_indoor,
-            ROUND(AVG(hum_outdoor), 1)                              AS hum_outdoor,
-            ROUND((AVG(temp_indoor_c) - AVG(temp_outdoor_c)) * 9 / 5, 2) AS delta_f,
-            MAX(mode)                                               AS mode,
-            MAX(equipment_status)                                   AS equipment_status,
-            SUM(CASE WHEN equipment_status = 3            THEN 5 ELSE 0 END) AS runtime_heat_min,
-            SUM(CASE WHEN equipment_status IN (1, 2)      THEN 5 ELSE 0 END) AS runtime_cool_min,
-            ROUND(AVG(CASE WHEN equipment_status IN (1,2,3) THEN 1.0 ELSE 0.0 END) * 100, 1)
-                                                                    AS pct_running,
-            ${skyportSelectClause()},
-            MAX(sp_compressor_runtime) - LAG(MAX(sp_compressor_runtime))
-              OVER (PARTITION BY r.device_id ORDER BY (r.ts / ?))  AS compressor_runtime_delta,
-            ${energyClause(sampleSec, rate)},
-            ${psychroClause()},
-            ${capacityClause()},
-            ${airGradientClause()}
+            (r.ts / ${bucket}) * ${bucket} AS ts,
+            COUNT(*) AS samples${wanted.length > 0 ? ',\n            ' : ''}${wanted.join(',\n            ')}
           FROM readings r
           LEFT JOIN air_quality aq ON aq.ts = r.ts
           WHERE ${where.join(' AND ')}
-          GROUP BY r.device_id, (r.ts / ?)
+          GROUP BY r.device_id, (r.ts / ${bucket})
           ORDER BY r.ts ASC
           LIMIT ?`,
     args,
@@ -755,6 +787,8 @@ export interface AirSeriesOptions {
   toTs: number;
   bucketSec: number;
   limit: number;
+  /** Output columns to compute, or undefined for all. Values are unchanged. */
+  fields?: Set<string> | undefined;
 }
 
 /**
@@ -764,27 +798,43 @@ export interface AirSeriesOptions {
  * thermostat readings do: joining onto readings would silently truncate it to
  * whatever the bridge happened to be running for.
  */
+/** Every optional column of an air-quality row, one expression per element. */
+export function buildAirSelects(): string[] {
+  const w = humidityRatioSql('temp_c', 'rh');
+  return [
+    `ROUND(AVG(temp_c) * 9.0 / 5.0 + 32.0, 1) AS ag_temp_f`,
+    `ROUND(AVG(rh), 1) AS ag_rh`,
+    `ROUND(AVG(${w}), 1) AS ag_w_gr`,
+    `ROUND(AVG(co2), 0) AS ag_co2`,
+    `ROUND(AVG(pm02), 1) AS ag_pm02`,
+    `ROUND(AVG(pm01), 1) AS ag_pm01`,
+    `ROUND(AVG(pm10), 1) AS ag_pm10`,
+    `ROUND(AVG(tvoc_index), 0) AS ag_tvoc_index`,
+    `ROUND(AVG(nox_index), 0) AS ag_nox_index`,
+  ];
+}
+
 export async function getAirSeries(db: Db, o: AirSeriesOptions): Promise<Row[]> {
   const bucket = Math.max(1, Math.floor(o.bucketSec));
-  const w = humidityRatioSql('temp_c', 'rh');
+  // Interpolated, not bound, for the same reason as getSeries: the select list
+  // holds no placeholders, so filtering columns cannot shift the arguments.
+  const selects = buildAirSelects();
+  const wanted = o.fields
+    ? selects.filter((e) => {
+      const a = aliasOf(e);
+      return a !== null && o.fields!.has(a);
+    })
+    : selects;
+
   const res = await db.execute({
-    sql: `SELECT (ts / ?) * ?                              AS ts,
-                 COUNT(*)                                  AS samples,
-                 ROUND(AVG(temp_c) * 9.0 / 5.0 + 32.0, 1)  AS ag_temp_f,
-                 ROUND(AVG(rh), 1)                         AS ag_rh,
-                 ROUND(AVG(${w}), 1)                       AS ag_w_gr,
-                 ROUND(AVG(co2), 0)                        AS ag_co2,
-                 ROUND(AVG(pm02), 1)                       AS ag_pm02,
-                 ROUND(AVG(pm01), 1)                       AS ag_pm01,
-                 ROUND(AVG(pm10), 1)                       AS ag_pm10,
-                 ROUND(AVG(tvoc_index), 0)                 AS ag_tvoc_index,
-                 ROUND(AVG(nox_index), 0)                  AS ag_nox_index
+    sql: `SELECT (ts / ${bucket}) * ${bucket} AS ts,
+                 COUNT(*) AS samples${wanted.length > 0 ? ',\n                 ' : ''}${wanted.join(',\n                 ')}
           FROM air_quality
           WHERE ts >= ? AND ts <= ?
-          GROUP BY (ts / ?)
+          GROUP BY (ts / ${bucket})
           ORDER BY ts ASC
           LIMIT ?`,
-    args: [bucket, bucket, o.fromTs, o.toTs, bucket, o.limit],
+    args: [o.fromTs, o.toTs, o.limit],
   });
   return res.rows;
 }

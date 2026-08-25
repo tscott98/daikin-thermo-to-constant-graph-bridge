@@ -112,7 +112,7 @@
           "source": "url",
           "parser": "backend",
           "format": "timeseries",
-          "url": "/api/series?from=$__from&to=$__to&interval=$__interval_ms&device=$device",
+          "url": "/api/series?from=$__from&to=$__to&interval=$__interval_ms&device=$device&fields=sp_fault_od_critical",
           "url_options": {
             "method": "GET"
           },
@@ -199,7 +199,7 @@
           "source": "url",
           "parser": "backend",
           "format": "timeseries",
-          "url": "/api/series?from=$__from&to=$__to&interval=$__interval_ms&device=$device",
+          "url": "/api/series?from=$__from&to=$__to&interval=$__interval_ms&device=$device&fields=sp_fault_od_minor",
           "url_options": {
             "method": "GET"
           },
@@ -286,7 +286,7 @@
           "source": "url",
           "parser": "backend",
           "format": "timeseries",
-          "url": "/api/series?from=$__from&to=$__to&interval=$__interval_ms&device=$device",
+          "url": "/api/series?from=$__from&to=$__to&interval=$__interval_ms&device=$device&fields=sp_fault_ifc_critical",
           "url_options": {
             "method": "GET"
           },
@@ -373,7 +373,7 @@
           "source": "url",
           "parser": "backend",
           "format": "timeseries",
-          "url": "/api/series?from=$__from&to=$__to&interval=$__interval_ms&device=$device",
+          "url": "/api/series?from=$__from&to=$__to&interval=$__interval_ms&device=$device&fields=sp_fault_ifc_minor",
           "url_options": {
             "method": "GET"
           },
@@ -460,7 +460,7 @@
           "source": "url",
           "parser": "backend",
           "format": "timeseries",
-          "url": "/api/series?from=$__from&to=$__to&interval=$__interval_ms&device=$device",
+          "url": "/api/series?from=$__from&to=$__to&interval=$__interval_ms&device=$device&fields=sp_fault_stat_critical",
           "url_options": {
             "method": "GET"
           },
@@ -547,7 +547,7 @@
           "source": "url",
           "parser": "backend",
           "format": "timeseries",
-          "url": "/api/series?from=$__from&to=$__to&interval=$__interval_ms&device=$device",
+          "url": "/api/series?from=$__from&to=$__to&interval=$__interval_ms&device=$device&fields=sp_fault_stat_minor",
           "url_options": {
             "method": "GET"
           },
@@ -634,7 +634,7 @@
           "source": "url",
           "parser": "backend",
           "format": "timeseries",
-          "url": "/api/series?from=$__from&to=$__to&interval=$__interval_ms&device=$device",
+          "url": "/api/series?from=$__from&to=$__to&interval=$__interval_ms&device=$device&fields=sp_discharge_temp_f,sp_od_coil_temp_f,sp_od_liquid_temp_f,sp_suction_temp_f,sp_eev_suction_temp_f",
           "url_options": {
             "method": "GET"
           },
@@ -798,7 +798,7 @@
           "source": "url",
           "parser": "backend",
           "format": "timeseries",
-          "url": "/api/series?from=$__from&to=$__to&interval=$__interval_ms&device=$device",
+          "url": "/api/series?from=$__from&to=$__to&interval=$__interval_ms&device=$device&fields=sp_suction_pressure",
           "url_options": {
             "method": "GET"
           },
@@ -882,7 +882,7 @@
           "source": "url",
           "parser": "backend",
           "format": "timeseries",
-          "url": "/api/series?from=$__from&to=$__to&interval=$__interval_ms&device=$device",
+          "url": "/api/series?from=$__from&to=$__to&interval=$__interval_ms&device=$device&fields=sp_eev_superheat_raw",
           "url_options": {
             "method": "GET"
           },
@@ -966,7 +966,7 @@
           "source": "url",
           "parser": "backend",
           "format": "timeseries",
-          "url": "/api/series?from=$__from&to=$__to&interval=$__interval_ms&device=$device",
+          "url": "/api/series?from=$__from&to=$__to&interval=$__interval_ms&device=$device&fields=sp_indoor_airflow,sp_od_fan_rpm,sp_eev_opening",
           "url_options": {
             "method": "GET"
           },
@@ -1090,7 +1090,7 @@
           "source": "url",
           "parser": "backend",
           "format": "timeseries",
-          "url": "/api/series?from=$__from&to=$__to&interval=$__interval_ms&device=$device",
+          "url": "/api/series?from=$__from&to=$__to&interval=$__interval_ms&device=$device&fields=samples",
           "url_options": {
             "method": "GET"
           },

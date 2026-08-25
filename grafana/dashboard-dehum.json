@@ -112,7 +112,7 @@
           "source": "url",
           "parser": "backend",
           "format": "timeseries",
-          "url": "/api/series?from=$__from&to=$__to&interval=$__interval_ms&device=$device",
+          "url": "/api/series?from=$__from&to=$__to&interval=$__interval_ms&device=$device&fields=hum_indoor",
           "url_options": {
             "method": "GET"
           },
@@ -238,7 +238,7 @@
           "source": "url",
           "parser": "backend",
           "format": "timeseries",
-          "url": "/api/series?from=$__from&to=$__to&interval=$__interval_ms&device=$device",
+          "url": "/api/series?from=$__from&to=$__to&interval=$__interval_ms&device=$device&fields=indoor_w_gr,outdoor_w_gr",
           "url_options": {
             "method": "GET"
           },
@@ -342,7 +342,7 @@
           "source": "url",
           "parser": "backend",
           "format": "timeseries",
-          "url": "/api/series?from=$__from&to=$__to&interval=$__interval_ms&device=$device",
+          "url": "/api/series?from=$__from&to=$__to&interval=$__interval_ms&device=$device&fields=indoor_dewpoint_f,outdoor_dewpoint_f",
           "url_options": {
             "method": "GET"
           },
@@ -446,7 +446,7 @@
           "source": "url",
           "parser": "backend",
           "format": "timeseries",
-          "url": "/api/series?from=$__from&to=$__to&interval=$__interval_ms&device=$device",
+          "url": "/api/series?from=$__from&to=$__to&interval=$__interval_ms&device=$device&fields=sp_dehum_demand_pct,sp_alg_dehum_demand,sp_alg_overcool_demand,sp_alg_cool_demand",
           "url_options": {
             "method": "GET"
           },
@@ -590,7 +590,7 @@
           "source": "url",
           "parser": "backend",
           "format": "timeseries",
-          "url": "/api/series?from=$__from&to=$__to&interval=$__interval_ms&device=$device",
+          "url": "/api/series?from=$__from&to=$__to&interval=$__interval_ms&device=$device&fields=sp_requested_airflow,sp_indoor_airflow",
           "url_options": {
             "method": "GET"
           },
@@ -694,7 +694,7 @@
           "source": "url",
           "parser": "backend",
           "format": "timeseries",
-          "url": "/api/series?from=$__from&to=$__to&interval=$__interval_ms&device=$device",
+          "url": "/api/series?from=$__from&to=$__to&interval=$__interval_ms&device=$device&fields=sp_compressor_rps,sp_frequency_pct",
           "url_options": {
             "method": "GET"
           },
@@ -798,7 +798,7 @@
           "source": "url",
           "parser": "backend",
           "format": "timeseries",
-          "url": "/api/series?from=$__from&to=$__to&interval=$__interval_ms&device=$device",
+          "url": "/api/series?from=$__from&to=$__to&interval=$__interval_ms&device=$device&fields=duct_return_temp_f,duct_supply_temp_f,return_dewpoint_f,duct_split_f",
           "url_options": {
             "method": "GET"
           },
@@ -942,7 +942,7 @@
           "source": "url",
           "parser": "backend",
           "format": "timeseries",
-          "url": "/api/series?from=$__from&to=$__to&interval=$__interval_ms&device=$device",
+          "url": "/api/series?from=$__from&to=$__to&interval=$__interval_ms&device=$device&fields=condensing_margin_f",
           "url_options": {
             "method": "GET"
           },
@@ -1052,7 +1052,7 @@
           "source": "url",
           "parser": "backend",
           "format": "timeseries",
-          "url": "/api/series?from=$__from&to=$__to&interval=$__interval_ms&device=$device",
+          "url": "/api/series?from=$__from&to=$__to&interval=$__interval_ms&device=$device&fields=sensible_btuh,eer_est",
           "url_options": {
             "method": "GET"
           },
@@ -1160,7 +1160,7 @@
           "source": "url",
           "parser": "backend",
           "format": "timeseries",
-          "url": "/api/series?from=$__from&to=$__to&interval=$__interval_ms&device=$device",
+          "url": "/api/series?from=$__from&to=$__to&interval=$__interval_ms&device=$device&fields=superheat_f",
           "url_options": {
             "method": "GET"
           },

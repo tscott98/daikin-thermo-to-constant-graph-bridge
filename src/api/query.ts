@@ -16,6 +16,15 @@ export interface SeriesQuery {
   csv: boolean;
   /** Electricity price in currency units per kWh; 0 disables the cost column. */
   ratePerKwh: number;
+  /**
+   * Output columns to compute, or undefined for all of them.
+   *
+   * A series row carries ~88 columns while a panel charts two or three, so
+   * every dashboard query was computing and serialising roughly thirty times
+   * the data it used. Naming the wanted columns cuts that without changing any
+   * value: the columns returned are identical, there are simply fewer of them.
+   */
+  fields: Set<string> | undefined;
 }
 
 export const MAX_SERIES_ROWS = 20_000;
@@ -55,6 +64,22 @@ export function toBucketSeconds(raw: string | null): number {
   return n > 10_000 ? Math.max(1, Math.floor(n / 1000)) : Math.max(1, Math.floor(n));
 }
 
+/**
+ * Requested output columns, or undefined for all.
+ *
+ * Only identifier-shaped names survive, so the value can be matched against
+ * SQL aliases without any chance of it becoming SQL itself. An empty or
+ * entirely junk list means "everything", which keeps a malformed URL showing
+ * too much data rather than none.
+ */
+export function toFields(raw: string | null): Set<string> | undefined {
+  if (raw === null || raw.trim() === '') return undefined;
+  const names = raw.split(',')
+    .map((s) => s.trim())
+    .filter((s) => /^[A-Za-z_]\w*$/.test(s));
+  return names.length > 0 ? new Set(names) : undefined;
+}
+
 /** Absent, unparseable, negative, or implausible rates all disable costing. */
 export function toRate(raw: string | null): number {
   const n = Number(raw);
@@ -81,5 +106,6 @@ export function parseSeriesQuery(q: URLSearchParams, nowSec: number): SeriesQuer
     limit,
     csv: q.get('format') === 'csv',
     ratePerKwh: toRate(q.get('rate')),
+    fields: toFields(q.get('fields')),
   };
 }
