@@ -21,11 +21,35 @@ import {
 } from '../constantgraph/publish';
 import { runCycle } from '../cycle';
 
-function json(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body, null, 2), {
+/**
+ * Indentation is opt-in because it is not free. Pretty-printing a series
+ * response builds a second string several times the size of the compact one,
+ * and on a few hundred wide rows that alone was enough to blow the Worker's
+ * CPU budget. Diagnostic routes return small bodies and keep it; the series
+ * routes are read by Grafana, which does not care.
+ */
+function json(body: unknown, status = 200, pretty = true): Response {
+  return new Response(pretty ? JSON.stringify(body, null, 2) : JSON.stringify(body), {
     status,
     headers: { 'Content-Type': 'application/json; charset=utf-8' },
   });
+}
+
+/**
+ * Rewrite a query row into the shape the charts expect, in place.
+ *
+ * The obvious spread-and-filter version allocates four times per row (entries
+ * array, filtered array, new object, spread copy). Multiplied by the column
+ * count of a series row it dominated the request, so this mutates the row the
+ * driver already gave us instead. Key order changes -- 'time' lands last --
+ * which nothing depends on, since fields are selected by name.
+ */
+function toPoint(r: Record<string, unknown>): Record<string, unknown> {
+  const ts = Number(r['ts']);
+  delete r['ts'];
+  r['ts_ms'] = ts * 1000;
+  r['time'] = new Date(ts * 1000).toISOString();
+  return r;
 }
 
 /**
@@ -152,14 +176,7 @@ async function route(request: Request, env: Env): Promise<Response> {
       fromTs: opts.fromTs, toTs: opts.toTs,
       bucketSec: opts.bucketSec, limit: opts.limit,
     });
-    return json(rows.map((r) => {
-      const ts = Number(r['ts']);
-      return {
-        time: new Date(ts * 1000).toISOString(),
-        ts_ms: ts * 1000,
-        ...Object.fromEntries(Object.entries(r).filter(([k]) => k !== 'ts')),
-      };
-    }));
+    return json(rows.map(toPoint), 200, false);
   }
 
   // GET /api/series -- time-bucketed rows for Grafana's Infinity data source.
@@ -179,17 +196,8 @@ async function route(request: Request, env: Env): Promise<Response> {
       sampleIntervalSec: settings.pollIntervalMin * 60,
     });
 
-    const out = rows.map((r) => {
-      const ts = Number(r['ts']);
-      return {
-        // Both forms so Infinity can use whichever it parses more happily.
-        time: new Date(ts * 1000).toISOString(),
-        ts_ms: ts * 1000,
-        ...Object.fromEntries(
-          Object.entries(r).filter(([k]) => k !== 'ts'),
-        ),
-      };
-    });
+    // Both 'time' and 'ts_ms' so Infinity can use whichever it parses more happily.
+    const out = rows.map(toPoint);
 
     if (opts.csv) {
       const cols = out.length > 0 ? Object.keys(out[0] as object) : [];
@@ -204,7 +212,7 @@ async function route(request: Request, env: Env): Promise<Response> {
       });
     }
 
-    return json(out);
+    return json(out, 200, false);
   }
 
   // POST /admin/config -- forwards a raw JSON body straight to /data/config.

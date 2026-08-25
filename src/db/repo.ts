@@ -559,6 +559,12 @@ function capacityClause(): string {
                        ELSE 0 END`;
 
   return [
+    // The probes themselves, not just what is derived from them. The split
+    // alone cannot say whether a change came from the return or the supply
+    // side, and the dehumidification dashboard charts both against it.
+    `ROUND(AVG(duct_return_temp_f), 1) AS duct_return_temp_f`,
+    `ROUND(AVG(duct_supply_temp_f), 1) AS duct_supply_temp_f`,
+    `ROUND(AVG(duct_return_rh), 1) AS duct_return_rh`,
     `ROUND(AVG(${split}), 1) AS duct_split_f`,
     `ROUND(AVG(${dewF}), 1) AS return_dewpoint_f`,
     // Negative means condensation is visible at the probe. Small positive is
