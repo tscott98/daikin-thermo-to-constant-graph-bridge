@@ -18,6 +18,41 @@
     }
   ],
   "uid": "daikin-health",
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": {
+          "type": "grafana",
+          "uid": "-- Grafana --"
+        },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      },
+      {
+        "datasource": {
+          "type": "grafana",
+          "uid": "-- Grafana --"
+        },
+        "enable": true,
+        "hide": false,
+        "iconColor": "orange",
+        "name": "Config changes",
+        "target": {
+          "limit": 100,
+          "matchAny": false,
+          "tags": [
+            "daikin",
+            "config-change"
+          ],
+          "type": "tags"
+        }
+      }
+    ]
+  },
   "title": "Daikin \u2014 System Health & Diagnostics",
   "description": "Whether anything is wrong or slowly getting worse. Defaults to 14 days so slow trends are visible; widen to months for superheat.",
   "schemaVersion": 39,

@@ -23,3 +23,6 @@ __pycache__/
 
 # Scratch space for API responses
 .tmp/
+
+# Transient annotation payloads
+.annotation*.json

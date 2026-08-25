@@ -80,6 +80,24 @@ def dashboard(uid, title, description, panels, refresh="5m", time_from="now-7d",
         # Without it Grafana mints a fresh uid each time and the dashboard list
         # fills with near-identical duplicates.
         "uid": uid,
+        # Surface config-change annotations on every chart. The brief's own
+        # constraint is one change at a time with a day between so effects stay
+        # attributable -- that only works if the changes are visible on the
+        # timeline you are reading the effect from.
+        "annotations": {"list": [
+            {
+                "builtIn": 1,
+                "datasource": {"type": "grafana", "uid": "-- Grafana --"},
+                "enable": True, "hide": True, "iconColor": "rgba(0, 211, 255, 1)",
+                "name": "Annotations & Alerts", "type": "dashboard",
+            },
+            {
+                "datasource": {"type": "grafana", "uid": "-- Grafana --"},
+                "enable": True, "hide": False, "iconColor": "orange",
+                "name": "Config changes", "target": {"limit": 100,
+                "matchAny": False, "tags": ["daikin", "config-change"], "type": "tags"},
+            },
+        ]},
         "title": title, "description": description,
         "schemaVersion": 39, "editable": True, "graphTooltip": 1,
         "refresh": refresh, "time": {"from": time_from, "to": "now"},

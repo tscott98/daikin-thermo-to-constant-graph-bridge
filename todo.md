@@ -162,3 +162,52 @@ and Refrigeration dashboards.
 - `sp_eev_superheat`, `sp_inverter_fin_temp`, `sp_indoor_power` remain
   uncalibrated. Superheat is charted raw because its *trend* is meaningful even
   when its scale is not; the other two are not charted at all.
+
+## Dehumidification analysis (reference/hvac-dehumidification-brief.md)
+
+**Q4 answered, and it inverts the brief's main worry.** Dehumidification *is*
+being requested: 85% outdoor dehum demand, 100% on both the control algorithm's
+dehum and overcool demands. The homeowner humidity target is therefore not
+misconfigured, and equipment-side tuning is reachable. This was previously
+unanswerable because the field was not stored; added in migration 0004.
+
+**Q6 is unanswerable and will stay that way.** The circulation-off and
+dehumidification-A changes were made 2026-08-22 17:00 local, **28.7 hours before
+the first logged reading**. There is no "before" in the database. Worse, both
+changes were made together, so even with data they could not be separated. The
+only before/after evidence is an eyeball observation of ~60% RH against measured
+~50-55%.
+
+**Q3 is now measured rather than inferred.** `sp_requested_airflow` gives
+commanded CFM directly. First sample: 740 commanded, 624 actual -- 16% under.
+Worth watching: deliberate dehum throttling and a static-pressure restriction
+(loaded filter, duct sizing) look identical in one sample and separate over days.
+
+**Q5 stays blocked.** SHR needs coil entering/leaving air temperatures;
+`ctIFCReturnAirTemperature` and `ctIFCSupplyAirTemperature` both return the
+32767 not-available sentinel on this hardware. No workaround from this telemetry.
+
+**Q7 answered by derivation.** Superheat computed from suction pressure and coil
+suction temperature against an R-410A P-T curve gives 10-12 F across all speed
+bands, which is healthy. The stored `sp_eev_superheat` field does *not* map to
+it -- a three-band coincidence suggested a divide-by-40 relationship, but
+regressing 178 samples gave R^2 = -8.6. It stays `_raw`.
+
+**Recommendation: hold the -9% airflow trim.** RH is already inside the 45-55%
+target, dehum demand is active, and actual airflow is already running 16% under
+commanded. Trimming further adds icing risk against a problem that appears
+largely resolved, and would contaminate attribution.
+
+**Changes are now annotated.** `scripts/mark-change.sh "what changed"` posts a
+Grafana annotation tagged `config-change`, which every dashboard displays as an
+orange marker. The 2026-08-22 change is recorded retroactively. Run this
+*before* the next adjustment so the effect stays attributable.
+
+Open: Q1 (runtime distribution), Q2 (cycle length by outdoor temp) and Q8
+(infiltration vs internal load) are all answerable but want 3-5 days of data.
+Q8 in particular needs several diurnal cycles to separate outdoor-tracking from
+occupancy-tracking.
+
+Also noted: measured compressor speed reached **85 RPS** against the brief's
+recorded max of 73. Either the setting differs from what is written down, or
+boost mode is overriding it -- `ctOutdoorBoostModeEnable` reads 2 on this unit.
