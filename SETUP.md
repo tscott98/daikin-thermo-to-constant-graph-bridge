@@ -292,6 +292,7 @@ reason; if you add logging here, keep that property.
 | Readings stop entirely | Check `/health`; if it 503s, the Turso token may have expired or been revoked |
 | `sp_*` columns all null | Skyport poll off or failing. Check `/admin/poll` for `skyport` and an `errors` entry |
 | `duct_*` columns all null | Needs `CG_READ_API_KEY` (the *read* key) and the right `CG_SENSOR_NODE` |
-| `ag_*` columns all null | Check `/admin/poll` for `airGradient`; 401 means the token, 404 means the location id |
+| `air_quality` table empty | Check `/admin/poll` for `airGradient`; 401 means the token, 404 means the location id |
+| Air panels empty before a certain date | Expected — backfill history with `scripts/backfill_air_csv.py` |
 | A source fails but readings continue | Working as intended — optional sources degrade to null columns |
 | `curl` returns nothing at all | Use `-sS`, not `-s`, which hides errors. On WSL, add `--http1.1` |

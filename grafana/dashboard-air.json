@@ -112,7 +112,7 @@
           "source": "url",
           "parser": "backend",
           "format": "timeseries",
-          "url": "/api/series?from=$__from&to=$__to&interval=$__interval_ms&device=$device",
+          "url": "/api/air?from=$__from&to=$__to&interval=$__interval_ms",
           "url_options": {
             "method": "GET"
           },
@@ -355,7 +355,7 @@
           "source": "url",
           "parser": "backend",
           "format": "timeseries",
-          "url": "/api/series?from=$__from&to=$__to&interval=$__interval_ms&device=$device",
+          "url": "/api/air?from=$__from&to=$__to&interval=$__interval_ms",
           "url_options": {
             "method": "GET"
           },
@@ -479,7 +479,7 @@
           "source": "url",
           "parser": "backend",
           "format": "timeseries",
-          "url": "/api/series?from=$__from&to=$__to&interval=$__interval_ms&device=$device",
+          "url": "/api/air?from=$__from&to=$__to&interval=$__interval_ms",
           "url_options": {
             "method": "GET"
           },

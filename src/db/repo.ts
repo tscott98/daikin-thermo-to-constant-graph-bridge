@@ -33,14 +33,6 @@ export interface Reading extends SkyportFields {
   duct_return_temp_f: number | null;
   duct_return_rh: number | null;
   duct_supply_temp_f: number | null;
-  ag_temp_c: number | null;
-  ag_rh: number | null;
-  ag_co2: number | null;
-  ag_pm02: number | null;
-  ag_pm01: number | null;
-  ag_pm10: number | null;
-  ag_tvoc_index: number | null;
-  ag_nox_index: number | null;
   raw: string | null;
   published: number;
 }
@@ -142,14 +134,6 @@ function rowToReading(r: Row): Reading {
     duct_return_temp_f: asNum(r['duct_return_temp_f']),
     duct_return_rh: asNum(r['duct_return_rh']),
     duct_supply_temp_f: asNum(r['duct_supply_temp_f']),
-    ag_temp_c: asNum(r['ag_temp_c']),
-    ag_rh: asNum(r['ag_rh']),
-    ag_co2: asNum(r['ag_co2']),
-    ag_pm02: asNum(r['ag_pm02']),
-    ag_pm01: asNum(r['ag_pm01']),
-    ag_pm10: asNum(r['ag_pm10']),
-    ag_tvoc_index: asNum(r['ag_tvoc_index']),
-    ag_nox_index: asNum(r['ag_nox_index']),
     raw: asStr(r['raw']),
     published: asNum(r['published']) ?? 0,
   };
@@ -196,14 +180,6 @@ export function toReading(
     duct_return_temp_f: null,
     duct_return_rh: null,
     duct_supply_temp_f: null,
-    ag_temp_c: null,
-    ag_rh: null,
-    ag_co2: null,
-    ag_pm02: null,
-    ag_pm01: null,
-    ag_pm10: null,
-    ag_tvoc_index: null,
-    ag_nox_index: null,
     raw: keepRaw ? JSON.stringify(detail) : null,
     published: 0,
   };
@@ -234,9 +210,8 @@ export async function insertReadings(db: Db, rows: Reading[]): Promise<number> {
       sp_fault_od_minor, sp_fault_ifc_critical, sp_fault_ifc_minor, sp_fault_stat_critical,
       sp_fault_stat_minor,
       duct_return_temp_f, duct_return_rh, duct_supply_temp_f,
-      ag_temp_c, ag_rh, ag_co2, ag_pm02, ag_pm01, ag_pm10, ag_tvoc_index, ag_nox_index,
       raw, published
-    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,0)`;
+    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,0)`;
 
   const statements: InStatement[] = rows.map((r) => ({
     sql,
@@ -259,7 +234,6 @@ export async function insertReadings(db: Db, rows: Reading[]): Promise<number> {
       r.sp_fault_od_minor, r.sp_fault_ifc_critical, r.sp_fault_ifc_minor, r.sp_fault_stat_critical,
       r.sp_fault_stat_minor,
       r.duct_return_temp_f, r.duct_return_rh, r.duct_supply_temp_f,
-      r.ag_temp_c, r.ag_rh, r.ag_co2, r.ag_pm02, r.ag_pm01, r.ag_pm10, r.ag_tvoc_index, r.ag_nox_index,
       r.raw,
     ],
   }));
@@ -610,17 +584,17 @@ function capacityClause(): string {
  * quantity, so any disagreement is real rather than a thermometer artefact.
  */
 function airGradientClause(): string {
-  const w = humidityRatioSql('ag_temp_c', 'ag_rh');
+  const w = humidityRatioSql('aq.temp_c', 'aq.rh');
   return [
-    `ROUND(AVG(ag_temp_c) * 9.0 / 5.0 + 32.0, 1) AS ag_temp_f`,
-    `ROUND(AVG(ag_rh), 1) AS ag_rh`,
+    `ROUND(AVG(aq.temp_c) * 9.0 / 5.0 + 32.0, 1) AS ag_temp_f`,
+    `ROUND(AVG(aq.rh), 1) AS ag_rh`,
     `ROUND(AVG(${w}), 1) AS ag_w_gr`,
-    `ROUND(AVG(ag_co2), 0) AS ag_co2`,
-    `ROUND(AVG(ag_pm02), 1) AS ag_pm02`,
-    `ROUND(AVG(ag_pm01), 1) AS ag_pm01`,
-    `ROUND(AVG(ag_pm10), 1) AS ag_pm10`,
-    `ROUND(AVG(ag_tvoc_index), 0) AS ag_tvoc_index`,
-    `ROUND(AVG(ag_nox_index), 0) AS ag_nox_index`,
+    `ROUND(AVG(aq.co2), 0) AS ag_co2`,
+    `ROUND(AVG(aq.pm02), 1) AS ag_pm02`,
+    `ROUND(AVG(aq.pm01), 1) AS ag_pm01`,
+    `ROUND(AVG(aq.pm10), 1) AS ag_pm10`,
+    `ROUND(AVG(aq.tvoc_index), 0) AS ag_tvoc_index`,
+    `ROUND(AVG(aq.nox_index), 0) AS ag_nox_index`,
   ].join(',\n            ');
 }
 
@@ -726,12 +700,85 @@ export async function getSeries(db: Db, o: SeriesOptions): Promise<Row[]> {
             ${psychroClause()},
             ${capacityClause()},
             ${airGradientClause()}
-          FROM readings
+          FROM readings r
+          LEFT JOIN air_quality aq ON aq.ts = r.ts
           WHERE ${where.join(' AND ')}
           GROUP BY device_id, (ts / ?)
           ORDER BY ts ASC
           LIMIT ?`,
     args,
+  });
+  return res.rows;
+}
+
+
+export interface AirQualityRow {
+  temp_c: number | null;
+  rh: number | null;
+  co2: number | null;
+  pm02: number | null;
+  pm01: number | null;
+  pm10: number | null;
+  tvoc_index: number | null;
+  nox_index: number | null;
+}
+
+/**
+ * Air quality is house-level, so it is keyed on time alone rather than on a
+ * thermostat. INSERT OR REPLACE keeps a re-poll or a CSV backfill idempotent;
+ * `source` distinguishes a live poll from backfilled export rows.
+ */
+export async function insertAirQuality(
+  db: Db,
+  ts: number,
+  a: AirQualityRow,
+): Promise<void> {
+  const values = [a.temp_c, a.rh, a.co2, a.pm02, a.pm01, a.pm10, a.tvoc_index, a.nox_index];
+  if (values.every((v) => v === null)) return;
+
+  await db.execute({
+    sql: `INSERT OR REPLACE INTO air_quality
+            (ts, temp_c, rh, co2, pm02, pm01, pm10, tvoc_index, nox_index, source)
+          VALUES (?,?,?,?,?,?,?,?,?,'api')`,
+    args: [ts, ...values],
+  });
+}
+
+export interface AirSeriesOptions {
+  fromTs: number;
+  toTs: number;
+  bucketSec: number;
+  limit: number;
+}
+
+/**
+ * Air quality as its own series.
+ *
+ * Separate from getSeries because the history runs further back than the
+ * thermostat readings do: joining onto readings would silently truncate it to
+ * whatever the bridge happened to be running for.
+ */
+export async function getAirSeries(db: Db, o: AirSeriesOptions): Promise<Row[]> {
+  const bucket = Math.max(1, Math.floor(o.bucketSec));
+  const w = humidityRatioSql('temp_c', 'rh');
+  const res = await db.execute({
+    sql: `SELECT (ts / ?) * ?                              AS ts,
+                 COUNT(*)                                  AS samples,
+                 ROUND(AVG(temp_c) * 9.0 / 5.0 + 32.0, 1)  AS ag_temp_f,
+                 ROUND(AVG(rh), 1)                         AS ag_rh,
+                 ROUND(AVG(${w}), 1)                       AS ag_w_gr,
+                 ROUND(AVG(co2), 0)                        AS ag_co2,
+                 ROUND(AVG(pm02), 1)                       AS ag_pm02,
+                 ROUND(AVG(pm01), 1)                       AS ag_pm01,
+                 ROUND(AVG(pm10), 1)                       AS ag_pm10,
+                 ROUND(AVG(tvoc_index), 0)                 AS ag_tvoc_index,
+                 ROUND(AVG(nox_index), 0)                  AS ag_nox_index
+          FROM air_quality
+          WHERE ts >= ? AND ts <= ?
+          GROUP BY (ts / ?)
+          ORDER BY ts ASC
+          LIMIT ?`,
+    args: [bucket, bucket, o.fromTs, o.toTs, bucket, o.limit],
   });
   return res.rows;
 }

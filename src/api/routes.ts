@@ -11,7 +11,7 @@
 import type { Env } from '../config';
 import { settingsFrom } from '../config';
 import { createDb } from '../db/client';
-import { getSeries, getStats, listDevices } from '../db/repo';
+import { getAirSeries, getSeries, getStats, listDevices } from '../db/repo';
 import { parseSeriesQuery } from './query';
 import { ConstantGraphClient } from '../constantgraph/client';
 import {
@@ -138,6 +138,28 @@ async function route(request: Request, env: Env): Promise<Response> {
     } catch (err) {
       return json({ error: err instanceof Error ? err.message : String(err) }, 500);
     }
+  }
+
+  // GET /api/air -- air quality as its own series.
+  //
+  // Separate from /api/series because this history reaches back further than
+  // the thermostat readings do; joining onto readings would silently truncate
+  // it to whatever the bridge happened to be running for.
+  if (path === '/api/air' && request.method === 'GET') {
+    const opts = parseSeriesQuery(url.searchParams, Math.floor(Date.now() / 1000));
+    const db = createDb(env);
+    const rows = await getAirSeries(db, {
+      fromTs: opts.fromTs, toTs: opts.toTs,
+      bucketSec: opts.bucketSec, limit: opts.limit,
+    });
+    return json(rows.map((r) => {
+      const ts = Number(r['ts']);
+      return {
+        time: new Date(ts * 1000).toISOString(),
+        ts_ms: ts * 1000,
+        ...Object.fromEntries(Object.entries(r).filter(([k]) => k !== 'ts')),
+      };
+    }));
   }
 
   // GET /api/series -- time-bucketed rows for Grafana's Infinity data source.

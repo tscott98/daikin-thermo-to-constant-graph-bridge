@@ -15,6 +15,7 @@ import {
   pruneRaw,
   toReading,
   updateDeviceSkyport,
+  insertAirQuality,
   upsertDevices,
   type Reading,
 } from './db/repo';
@@ -121,14 +122,6 @@ export async function runCycle(env: Env, db: Db): Promise<CycleResult> {
       row.duct_return_temp_f = duct.returnTempF;
       row.duct_return_rh = duct.returnRh;
       row.duct_supply_temp_f = duct.supplyTempF;
-      row.ag_temp_c = ag.tempC;
-      row.ag_rh = ag.rh;
-      row.ag_co2 = ag.co2;
-      row.ag_pm02 = ag.pm02;
-      row.ag_pm01 = ag.pm01;
-      row.ag_pm10 = ag.pm10;
-      row.ag_tvoc_index = ag.tvocIndex;
-      row.ag_nox_index = ag.noxIndex;
 
       if (skyport) {
         skyportStats.attempted += 1;
@@ -154,6 +147,20 @@ export async function runCycle(env: Env, db: Db): Promise<CycleResult> {
   }
 
   const inserted = await insertReadings(db, rows);
+
+  // Air quality is house-level, so it is stored once per cycle keyed on time
+  // rather than copied onto every thermostat's row.
+  if (agStatus === 'ok') {
+    try {
+      await insertAirQuality(db, ts, {
+        temp_c: ag.tempC, rh: ag.rh, co2: ag.co2, pm02: ag.pm02,
+        pm01: ag.pm01, pm10: ag.pm10,
+        tvoc_index: ag.tvocIndex, nox_index: ag.noxIndex,
+      });
+    } catch (err) {
+      errors.push(`air quality store: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
 
   let publish: PublishOutcome = {
     attempted: 0,

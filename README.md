@@ -263,6 +263,28 @@ quiet house look identical on every other chart.
 Conversions are applied per row inside `AVG()`, not to bucket averages — averaging relative
 humidity and converting afterwards gives a different and wrong number.
 
+**Air quality has its own table.** `readings` is keyed `(device_id, ts)` because a reading
+belongs to a thermostat. Air quality belongs to the house, and its history reaches back further
+than the bridge has been running — so it lives in `air_quality`, keyed on time alone, and
+`/api/air` serves it. Joining it onto readings would have truncated it to whatever window the
+bridge happened to be collecting for, and backfilling it into `readings` would have meant
+inventing reading rows with no thermostat data, which `samples` and `pct_running` would then
+have counted as equipment observed and found idle.
+
+`/api/series` still exposes the same `ag_*` columns via a `LEFT JOIN`, for correlating air
+quality against HVAC behaviour where both exist.
+
+History predating the first poll comes from an AirGradient CSV export:
+
+```bash
+python scripts/backfill_air_csv.py "air-gradient-export/export.csv" > backfill.sql
+turso db shell daikin < backfill.sql
+```
+
+Rows are keyed on the UTC timestamp snapped to a 5-minute bucket and written with
+`INSERT OR REPLACE`, so re-running is safe. The `source` column marks whether a row came from a
+live poll (`api`) or a backfilled export (`csv`).
+
 **Duct sensors and measured capacity.** External return and supply probes (SmartThings,
 published into ConstantGraph and read back via its read API) give
 `duct_return_temp_f`, `duct_return_rh` and `duct_supply_temp_f`, from which
@@ -367,6 +389,7 @@ Everything except `/health` requires an `X-Api-Key` header matching `READ_API_KE
 | `GET /health` | Unauthenticated liveness. Counts and lag only, never readings. |
 | `GET /api/stats` | Row counts, date range, backlog, per-device channel blocks. |
 | `GET /api/series` | Time-bucketed rows in Fahrenheit, for charting tools. See below. |
+| `GET /api/air` | Air quality as its own series, reaching back further than the readings do. |
 | `POST /admin/poll` | Force a capture and publish cycle without waiting for cron. |
 | `POST /admin/bootstrap` | Register channels, devices, and graphs. Safe to re-run. |
 | `POST /admin/config` | Forward a raw JSON body to ConstantGraph's `/data/config`. |

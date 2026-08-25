@@ -16,6 +16,7 @@ import json
 # collapses duplicate slashes in the request path.
 DS = {"type": "yesoreyeram-infinity-datasource", "uid": "${DS_INFINITY}"}
 BASE_URL = "/api/series?from=$__from&to=$__to&interval=$__interval_ms&device=$device"
+AIR_URL = "/api/air?from=$__from&to=$__to&interval=$__interval_ms"
 
 
 def target(columns, url=BASE_URL, fmt="timeseries"):
@@ -469,6 +470,7 @@ OZONE_STEPS = {"mode": "absolute", "steps": [
 AIR = [
     panel(1, "CO2 - ventilation and occupancy", [("ag_co2", "CO2")],
           {"h": 9, "w": 12, "x": 0, "y": 0}, unit="ppm",
+          url=AIR_URL,
           desc="Outdoor air is about 420 ppm, so the excess over that is your own "
                "breath accumulating. Below 800 is comfortable; above 1200 has "
                "measurable effects on concentration. It doubles as an occupancy "
@@ -497,6 +499,7 @@ AIR = [
     panel(3, "Particle sizes",
           [("ag_pm01", "PM1"), ("ag_pm02", "PM2.5"), ("ag_pm10", "PM10")],
           {"h": 8, "w": 12, "x": 0, "y": 9},
+          url=AIR_URL,
           desc="PM1 rising while PM2.5 stays flat suggests combustion or cooking. "
                "PM10 moving alone suggests dust, or activity stirring up settled "
                "material.",
@@ -506,6 +509,7 @@ AIR = [
     panel(4, "Chemical pollutants",
           [("ag_tvoc_index", "TVOC index"), ("ag_nox_index", "NOx index")],
           {"h": 8, "w": 12, "x": 12, "y": 9},
+          url=AIR_URL,
           desc="Sensor indices, not concentrations: 100 is the running baseline "
                "for this room, so excursions mark a change rather than an "
                "absolute level. Useful for spotting cleaning products, cooking, "
