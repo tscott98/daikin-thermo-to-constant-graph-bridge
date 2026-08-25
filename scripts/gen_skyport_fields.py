@@ -87,8 +87,8 @@ FIELDS = [
     ("sp_tstat_temp_offset",     "sensorDynamicAlgorithmTempOffset",  "raw", "calibration offset applied to the raw sensor"),
     # Only the most recent fault is stored per poll. The boolean fault flags say
     # something is wrong; the code says what, which is the part you act on.
-    ("sp_fault1_code",           "fault1Code",                        "raw", "most recent fault code"),
-    ("sp_fault1_equipment",      "fault1Equipment",                   "raw", "which unit raised it"),
+    ("sp_fault1_code",           "fault1Code",                        "raw", "most recent entry in the fault LOG, not necessarily active; the sp_fault_* booleans say whether anything is wrong now"),
+    ("sp_fault1_equipment",      "fault1Equipment",                   "raw", "which unit logged it"),
     ("sp_fault1_level",          "fault1Level",                       "raw", "severity"),
 ]
 

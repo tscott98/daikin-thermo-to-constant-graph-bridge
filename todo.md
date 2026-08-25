@@ -208,6 +208,37 @@ Open: Q1 (runtime distribution), Q2 (cycle length by outdoor temp) and Q8
 Q8 in particular needs several diurnal cycles to separate outdoor-tracking from
 occupancy-tracking.
 
-Also noted: measured compressor speed reached **85 RPS** against the brief's
-recorded max of 73. Either the setting differs from what is written down, or
-boost mode is overriding it -- `ctOutdoorBoostModeEnable` reads 2 on this unit.
+~~Also noted: measured compressor speed reached **85 RPS** against the brief's
+recorded max of 73.~~ **Resolved.** `ctOutdoorCoolMaxRPS` reads 730 -- tenths
+RPS, so 73.0, exactly matching the brief -- and `ctOutdoorBoostModeEnable`
+reads 2. The setting is what the record says; boost is what exceeds it. Both
+are now stored on `devices`.
+
+## Field coverage (2026-08-25)
+
+Diffing the probe dump against the mapper: the thermostat reports **1578
+fields**; the bridge was storing **44**. Migration 0009 adds 17 more. What the
+gap analysis turned up, beyond the compressor ceiling above:
+
+**The thermostat applies an 8.8 F calibration offset to its own sensor.**
+`sensorRawTemperature` 26.7 C against `TstatCalculatedTemp` 21.7 C, with
+`sensorDynamicAlgorithmTempOffset` -5. This is probably why the AirGradient
+"reads several degrees warmer than the thermostat" -- it is not disagreeing
+with the thermostat's sensor, it is disagreeing with the correction. Relative
+humidity is only meaningful against the temperature it was measured at, so
+this matters for the dehumidification work rather than being a curiosity.
+
+**The filter is nearly new, which weakens one airflow hypothesis.**
+`alertMediaAirFilterDays` read 6 in the 2026-08-24 probe and 7 today, so it
+counts days elapsed, against a 183-day limit. Q3's 16% airflow shortfall was
+"deliberate dehum throttling or a static-pressure restriction"; a loaded
+filter is now the least likely form of the latter.
+
+**Subcooling is now captured** (`sp_eev_subcool`), giving superheat a
+counterpart. Together they separate undercharge from restriction, which
+neither does alone. Scale is unverified -- it reads 250 where superheat reads
+354 -- so it ships raw like its sibling.
+
+**No active faults.** All six `sp_fault_*` booleans read 0. `fault1Code` 224
+is the most recent entry in the fault *log*, not a live condition; alerting
+should stay on the booleans.

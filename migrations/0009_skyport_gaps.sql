@@ -13,8 +13,8 @@ ALTER TABLE readings ADD COLUMN sp_filter_days_limit     REAL;  -- alertMediaAir
 ALTER TABLE readings ADD COLUMN sp_tstat_raw_temp        REAL;  -- sensorRawTemperature (thermostat sensor before calibration, C)
 ALTER TABLE readings ADD COLUMN sp_tstat_calc_temp       REAL;  -- TstatCalculatedTemp (thermostat temperature after calibration, C)
 ALTER TABLE readings ADD COLUMN sp_tstat_temp_offset     REAL;  -- sensorDynamicAlgorithmTempOffset (calibration offset applied to the raw sensor)
-ALTER TABLE readings ADD COLUMN sp_fault1_code           REAL;  -- fault1Code (most recent fault code)
-ALTER TABLE readings ADD COLUMN sp_fault1_equipment      REAL;  -- fault1Equipment (which unit raised it)
+ALTER TABLE readings ADD COLUMN sp_fault1_code           REAL;  -- fault1Code (most recent entry in the fault LOG, not necessarily active; the sp_fault_* booleans say whether anything is wrong now)
+ALTER TABLE readings ADD COLUMN sp_fault1_equipment      REAL;  -- fault1Equipment (which unit logged it)
 ALTER TABLE readings ADD COLUMN sp_fault1_level          REAL;  -- fault1Level (severity)
 
 ALTER TABLE devices  ADD COLUMN sp_blower_max_cfm        REAL;  -- ctIFCBlowerMotorMaxCFM (blower capability, CFM; lets airflow read as % of maximum)

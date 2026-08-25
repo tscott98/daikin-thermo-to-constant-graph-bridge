@@ -252,9 +252,11 @@ export function skyportFields(d: SkyportDeviceData): SkyportFields {
     sp_tstat_calc_temp: plain(d.TstatCalculatedTemp),
     // calibration offset applied to the raw sensor
     sp_tstat_temp_offset: plain(d.sensorDynamicAlgorithmTempOffset),
-    // most recent fault code
+    // Most recent entry in the thermostat's fault LOG. Reads 224 here while
+    // every sp_fault_* boolean reads 0, so it is history rather than an
+    // active condition -- do not alert on it; alert on the booleans.
     sp_fault1_code: plain(d.fault1Code),
-    // which unit raised it
+    // which unit logged it
     sp_fault1_equipment: plain(d.fault1Equipment),
     // severity
     sp_fault1_level: plain(d.fault1Level),
