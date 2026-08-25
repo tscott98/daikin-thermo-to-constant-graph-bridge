@@ -530,7 +530,9 @@ AIR = [
           [("ag_temp_f", "AirGradient room"), ("indoor_f", "Thermostat"),
            ("ag_rh", "Room RH"), ("hum_indoor", "Thermostat RH")],
           {"h": 8, "w": 24, "x": 0, "y": 25},
-          desc="Two independent sensors in different places. The room reads "
+          desc="Two independent sensors in different places. Bound to the window "
+               "the bridge has been running, because it needs thermostat data; the "
+               "panel below covers the sensor's full history. The room reads "
                "several degrees warmer than the thermostat, which matters because "
                "at equal moisture the cooler location reports the higher relative "
                "humidity. Compare ag_w_gr against indoor_w_gr on the "
@@ -550,6 +552,31 @@ AIR = [
                "properties": [{"id": "unit", "value": "percent"},
                               {"id": "custom.axisPlacement", "value": "right"},
                               {"id": "color", "value": {"mode": "fixed", "fixedColor": "light-blue"}}]},
+          ]),
+
+    panel(7, "Room temperature, humidity and moisture - full history",
+          [("ag_temp_f", "Temperature"), ("ag_rh", "Relative humidity"),
+           ("ag_w_gr", "Humidity ratio")],
+          {"h": 9, "w": 24, "x": 0, "y": 33},
+          url=AIR_URL,
+          desc="Reads /api/air, so it covers the sensor's whole history rather than "
+               "only the window the bridge has been running. Humidity ratio is the "
+               "one to trust for moisture: relative humidity moves whenever the "
+               "temperature moves even if the actual water content has not, so a "
+               "step in RH means little until you check that grains per pound "
+               "stepped with it.",
+          overrides=[
+              {"matcher": {"id": "byName", "options": "Temperature"},
+               "properties": [{"id": "unit", "value": "fahrenheit"},
+                              {"id": "color", "value": {"mode": "fixed", "fixedColor": "orange"}}]},
+              {"matcher": {"id": "byName", "options": "Relative humidity"},
+               "properties": [{"id": "unit", "value": "percent"},
+                              {"id": "custom.axisPlacement", "value": "right"},
+                              {"id": "color", "value": {"mode": "fixed", "fixedColor": "blue"}}]},
+              {"matcher": {"id": "byName", "options": "Humidity ratio"},
+               "properties": [{"id": "custom.axisPlacement", "value": "right"},
+                              {"id": "custom.fillOpacity", "value": 12},
+                              {"id": "color", "value": {"mode": "fixed", "fixedColor": "purple"}}]},
           ]),
 ]
 

@@ -676,7 +676,7 @@
         "type": "yesoreyeram-infinity-datasource",
         "uid": "${DS_INFINITY}"
       },
-      "description": "Two independent sensors in different places. The room reads several degrees warmer than the thermostat, which matters because at equal moisture the cooler location reports the higher relative humidity. Compare ag_w_gr against indoor_w_gr on the dehumidification dashboard to see moisture without that confound.",
+      "description": "Two independent sensors in different places. Bound to the window the bridge has been running, because it needs thermostat data; the panel below covers the sensor's full history. The room reads several degrees warmer than the thermostat, which matters because at equal moisture the cooler location reports the higher relative humidity. Compare ag_w_gr against indoor_w_gr on the dehumidification dashboard to see moisture without that confound.",
       "gridPos": {
         "h": 8,
         "w": 24,
@@ -818,6 +818,150 @@
                 "value": {
                   "mode": "fixed",
                   "fixedColor": "light-blue"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      }
+    },
+    {
+      "id": 7,
+      "title": "Room temperature, humidity and moisture - full history",
+      "type": "timeseries",
+      "datasource": {
+        "type": "yesoreyeram-infinity-datasource",
+        "uid": "${DS_INFINITY}"
+      },
+      "description": "Reads /api/air, so it covers the sensor's whole history rather than only the window the bridge has been running. Humidity ratio is the one to trust for moisture: relative humidity moves whenever the temperature moves even if the actual water content has not, so a step in RH means little until you check that grains per pound stepped with it.",
+      "gridPos": {
+        "h": 9,
+        "w": 24,
+        "x": 0,
+        "y": 33
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "${DS_INFINITY}"
+          },
+          "type": "json",
+          "source": "url",
+          "parser": "backend",
+          "format": "timeseries",
+          "url": "/api/air?from=$__from&to=$__to&interval=$__interval_ms",
+          "url_options": {
+            "method": "GET"
+          },
+          "root_selector": "",
+          "columns": [
+            {
+              "selector": "time",
+              "text": "time",
+              "type": "timestamp"
+            },
+            {
+              "selector": "ag_temp_f",
+              "text": "Temperature",
+              "type": "number"
+            },
+            {
+              "selector": "ag_rh",
+              "text": "Relative humidity",
+              "type": "number"
+            },
+            {
+              "selector": "ag_w_gr",
+              "text": "Humidity ratio",
+              "type": "number"
+            }
+          ],
+          "filters": []
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "",
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 6
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Temperature"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "fahrenheit"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "orange"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Relative humidity"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "percent"
+              },
+              {
+                "id": "custom.axisPlacement",
+                "value": "right"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "blue"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Humidity ratio"
+            },
+            "properties": [
+              {
+                "id": "custom.axisPlacement",
+                "value": "right"
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 12
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "purple"
                 }
               }
             ]
