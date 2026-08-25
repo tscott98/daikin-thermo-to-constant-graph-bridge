@@ -1,19 +1,38 @@
-# Daikin One → ConstantGraph bridge
+# Daikin HVAC telemetry
 
-Polls a Daikin One thermostat every 5 minutes, keeps every reading in a Turso database, and
-publishes it to ConstantGraph for graphing. Compute and storage run on the free tiers of
-Cloudflare Workers and Turso. ConstantGraph requires their **Premium** tier: the `/data/timedata`
-endpoint this depends on is not available below it.
+Collects HVAC and indoor-environment telemetry every 5 minutes, keeps it all in a Turso
+database, publishes a summary to ConstantGraph, and serves it to Grafana. Compute and storage
+run on the free tiers of Cloudflare Workers and Turso.
+
+It began as a one-way bridge from a Daikin One thermostat to ConstantGraph. It now pulls from
+four sources and is really a small telemetry hub with ConstantGraph as one of its outputs.
+
+## Data sources
+
+| Source | API | What it adds | Required? |
+|---|---|---|---|
+| **Daikin One** | Integrator API, official | Temperatures, humidity, setpoints, mode, equipment status | Yes |
+| **Daikin Skyport** | Consumer API, undocumented | Power draw, compressor speed, refrigerant circuit, fault codes — 45 columns | Optional |
+| **Duct sensors** | ConstantGraph read API | Return and supply air temperature and humidity, from SmartThings probes | Optional |
+| **AirGradient** | Public API v1 | CO₂, particulates, TVOC/NOx, a second temperature and humidity pair | Optional |
+
+Every source but the first is optional and additive. Each is wrapped so that a failure degrades
+to null columns for that cycle rather than costing the reading — a dead AirGradient token must
+never stop the thermostat being recorded.
+
+The Skyport source deserves a warning: it is the API the phone app uses, is undocumented and
+unsanctioned, and can change without notice. It is a supplement, never the system of record. It
+authenticates with a refresh token minted once locally, so the account password is never stored.
 
 ## Why it keeps its own copy
 
-Neither service keeps your history. The Daikin API reports current state only, so anything you
-don't poll is gone. ConstantGraph's retention is bounded even on Premium: one month of raw
+None of these services keeps your history. The Daikin API reports current state only, so anything
+you don't poll is gone. ConstantGraph's retention is bounded even on Premium: one month of raw
 5-minute data, 12 months hourly, then daily for 5 years. (Their pricing page describes the daily
 rollup as lifetime and the subscriptions page says 5 years. Either way, 5-minute resolution older
 than a month cannot be recovered from it.)
 
-So Turso is the system of record and ConstantGraph is the view. Turso is also how you get at the
+So Turso is the system of record and everything else is a view. Turso is also how you get at the
 data from anywhere else, since it is plain SQLite over libSQL and any driver can connect to it.
 For hosted dashboards that cannot reach Turso, `/api/series` serves the same data over HTTP.
 
@@ -22,7 +41,10 @@ For hosted dashboards that cannot reach Turso, `/api/series` serves the same dat
 ```
 Cloudflare Worker  (cron: */5 * * * *)
   │
-  ├─ 1. CAPTURE   GET /v1/devices → GET /v1/devices/{id}  (sequential)
+  ├─ 1. CAPTURE   Daikin integrator API   → temperatures, setpoints, status
+  │               Daikin Skyport API      → power, compressor, refrigerant  (optional)
+  │               ConstantGraph read API  → duct return/supply probes       (optional)
+  │               AirGradient API         → CO2, particulates, TVOC         (optional)
   │               INSERT OR IGNORE into readings, published = 0
   │
   ├─ 2. PUBLISH   SELECT ... WHERE published = 0  (up to PUBLISH_BATCH)
@@ -32,6 +54,10 @@ Cloudflare Worker  (cron: */5 * * * *)
   └─ 3. PRUNE     once daily, null out raw JSON older than RAW_RETENTION_DAYS
 ```
 
+Only the integrator API is on the critical path. The other three are read once per cycle and
+shared across thermostats, since they describe the house and the equipment rather than any
+individual thermostat.
+
 Capture and publish are independent. If ConstantGraph is unreachable for six hours, capture keeps
 working and rows pile up unpublished; the next successful publish replays them at their true
 timestamps, so the graph fills in retroactively instead of showing a hole. That is why this uses
@@ -40,6 +66,12 @@ timestamps, so the graph fills in retroactively instead of showing a hole. That 
 Samples are snapped to their 5-minute bucket. Cron jitter therefore doesn't produce uneven
 spacing, and a manual `/admin/poll` in the same window collapses onto the scheduled sample
 instead of creating a near-duplicate.
+
+## What ConstantGraph gets
+
+ConstantGraph receives 11 channels per thermostat — the comfort metrics, not the equipment
+telemetry. It requires their **Premium** tier: the `/data/timedata` endpoint this depends on is
+not available below it. Everything else lives in Turso and is charted in Grafana.
 
 ## Setup
 
@@ -195,7 +227,12 @@ sensor the data came from.
 | [`dashboard.json`](grafana/dashboard.json) | Is the house comfortable and the system behaving? | Ambient, several times a day |
 | [`dashboard-energy.json`](grafana/dashboard-energy.json) | What is this costing, and is it performing? | Monthly, or when a bill surprises |
 | [`dashboard-health.json`](grafana/dashboard-health.json) | Is anything wrong, or slowly getting worse? | Rarely by choice — usually because an alert fired |
+| [`dashboard-air.json`](grafana/dashboard-air.json) | Is the air in here any good? | Ambient |
 | [`dashboard-dehum.json`](grafana/dashboard-dehum.json) | Why is indoor humidity high, and is the fix working? | Temporary — retire once the question is settled |
+
+Grouped by the question being asked and how often, not by which sensor the data came from. Air
+Quality carries EPA breakpoints as panel thresholds, so the colour states the judgement rather
+than leaving you to recall whether 35 µg/m³ is bad.
 
 Energy & Efficiency defaults to 30 days, because a single day says nothing about
 cost. Its two scatter panels pin the interval to hourly rather than following the
@@ -353,6 +390,17 @@ Vars live in `wrangler.toml`. Secrets are set with `wrangler secret put`.
 | `RAW_RETENTION_DAYS` | `30` | Days to keep raw JSON. `0` disables raw capture entirely. |
 | `DRY_RUN` | `false` | Capture to Turso but send nothing to ConstantGraph. |
 | `RATE_PER_KWH` | `0.14` | Electricity price for the `cost` column. `0` disables costing. |
+| `CG_SENSOR_NODE` | `1` | ConstantGraph location the duct sensors publish to. Not the one this writes to. |
+| `CG_CH_RETURN_TEMP` | `124` | Channel for return grille temperature. `0` skips it. |
+| `CG_CH_RETURN_RH` | `125` | Channel for return grille humidity. |
+| `CG_CH_SUPPLY_TEMP` | `39` | Channel for supply register temperature. |
+| `AG_LOCATION_ID` | `183155` | AirGradient location id, from their dashboard. |
+
+Secrets, set with `wrangler secret put`: `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN`,
+`DAIKIN_API_KEY`, `DAIKIN_EMAIL`, `DAIKIN_INTEGRATOR_TOKEN`, `CG_API_KEY`, `READ_API_KEY`, and
+optionally `DAIKIN_SKYPORT_EMAIL` + `DAIKIN_SKYPORT_REFRESH_TOKEN` (Skyport),
+`CG_READ_API_KEY` (duct sensors) and `AG_TOKEN` (AirGradient). An absent optional secret
+disables that source cleanly.
 
 ## Free-tier headroom
 
@@ -396,9 +444,17 @@ The general rule: where the field tables and the worked examples disagree, follo
 
 ## Development
 
+Migrations are numbered and additive; `0001_init.sql` always carries the complete schema for a
+fresh install, and later files exist for databases that already ran the earlier ones. Apply them
+all in order:
+
+```bash
+for f in migrations/*.sql; do turso db shell daikin < "$f"; done
+```
+
 ```bash
 npm install
-npm test          # 57 unit tests, no network or database needed
+npm test          # 83 unit tests, no network or database needed
 npm run typecheck
 npx wrangler dev  # needs .dev.vars; see SETUP.md
 ```
@@ -410,8 +466,40 @@ plotting 32 °F.
 
 ## Scope
 
-Read-only. The Daikin write endpoints (`PUT /msp`, `/schedule`, `/fan`) are deliberately not
-implemented, so nothing here can change your thermostat's settings.
+**Read-only against every source.** The Daikin write endpoints (`PUT /msp`, `/schedule`, `/fan`)
+are deliberately not implemented, so nothing here can change your thermostat's settings. The
+Skyport API can also write configuration and calibrate sensors; none of that is wired up. The
+only thing this writes anywhere is telemetry into ConstantGraph and Turso.
+
+That is a deliberate boundary rather than an unfinished feature. A bug in a read-only poller
+loses data; a bug in a controller changes how your house behaves while you are asleep.
+
+## Repository layout
+
+```
+src/
+  cycle.ts              capture -> publish -> prune, once per cron tick
+  daikin/               integrator API: token cache, device list, device detail
+  skyport/              consumer API: refresh-token auth, 45-column mapper
+  sensors/client.ts     duct probes, via the ConstantGraph read API
+  sensors/airgradient.ts  AirGradient public API v1
+  constantgraph/        publishing, and the /data/config bootstrap
+  db/repo.ts            Turso access, and every derived column in /api/series
+  api/                  ops endpoints and query parsing
+scripts/
+  gen_skyport_fields.py   single source for the Skyport migration and mapper
+  gen_dashboards.py       generates every Grafana dashboard
+  grafana-push.sh         pushes dashboards over the Grafana API
+  mark-change.sh          records a config change as a Grafana annotation
+  probe-skyport.sh        dumps what your hardware actually reports
+  get-refresh-token.sh    mints a Skyport refresh token, locally
+migrations/             0001 is the full schema; later files are additive
+grafana/                dashboards and alert rules
+```
+
+Anything generated has a generator, and the generator is the source of truth. The Skyport
+columns, its TypeScript mapper and migration 0003 all come from `gen_skyport_fields.py`, so
+schema and code cannot drift apart.
 
 ## License
 

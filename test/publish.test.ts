@@ -54,6 +54,14 @@ const reading = (over: Partial<Reading> = {}): Reading => ({
   duct_return_temp_f: null,
   duct_return_rh: null,
   duct_supply_temp_f: null,
+  ag_temp_c: null,
+  ag_rh: null,
+  ag_co2: null,
+  ag_pm02: null,
+  ag_pm01: null,
+  ag_pm10: null,
+  ag_tvoc_index: null,
+  ag_nox_index: null,
   ...over,
 });
 

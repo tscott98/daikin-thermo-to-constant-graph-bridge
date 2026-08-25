@@ -31,6 +31,10 @@ CG_CH_RETURN_TEMP = "124"
 CG_CH_RETURN_RH = "125"
 CG_CH_SUPPLY_TEMP = "39"
 
+# AirGradient indoor air quality monitor. Location id from the AG dashboard;
+# the token is a secret (wrangler secret put AG_TOKEN).
+AG_LOCATION_ID = "183155"
+
 # Secrets (set with `wrangler secret put <NAME>`, never committed):
 #   TURSO_DATABASE_URL       libsql://<db>-<org>.turso.io
 #   TURSO_AUTH_TOKEN         from `turso db tokens create daikin`
@@ -38,4 +42,6 @@ CG_CH_SUPPLY_TEMP = "39"
 #   DAIKIN_EMAIL             account email, used in the token request body
 #   DAIKIN_INTEGRATOR_TOKEN  integrator token from home integration settings
 #   CG_API_KEY               ConstantGraph API key
+#   CG_READ_API_KEY          ConstantGraph *read* key, for the duct sensors
+#   AG_TOKEN                 AirGradient place token, from app.airgradient.com/settings/place
 #   READ_API_KEY             self-issued key guarding this Worker's own read API

@@ -440,6 +440,116 @@ DEHUM = [
 ]
 
 
+# ---------------------------------------------------------------- Dashboard E
+# Air quality. Separate from the dehumidification investigation because it
+# answers a different question on a different cadence: that one is a temporary
+# enquiry into a specific fault, this is ongoing ambient monitoring.
+
+# EPA AQI breakpoints, encoded as thresholds so the panel colour carries the
+# judgement rather than leaving the reader to recall what counts as bad.
+CO2_STEPS = {"mode": "absolute", "steps": [
+    {"color": "green", "value": None},
+    {"color": "yellow", "value": 800},
+    {"color": "orange", "value": 1200},
+    {"color": "red", "value": 2000},
+]}
+PM25_STEPS = {"mode": "absolute", "steps": [
+    {"color": "green", "value": None},
+    {"color": "yellow", "value": 12},
+    {"color": "orange", "value": 35.5},
+    {"color": "red", "value": 55.5},
+]}
+OZONE_STEPS = {"mode": "absolute", "steps": [
+    {"color": "green", "value": None},
+    {"color": "yellow", "value": 55},
+    {"color": "orange", "value": 71},
+    {"color": "red", "value": 86},
+]}
+
+AIR = [
+    panel(1, "CO2 - ventilation and occupancy", [("ag_co2", "CO2")],
+          {"h": 9, "w": 12, "x": 0, "y": 0}, unit="ppm",
+          desc="Outdoor air is about 420 ppm, so the excess over that is your own "
+               "breath accumulating. Below 800 is comfortable; above 1200 has "
+               "measurable effects on concentration. It doubles as an occupancy "
+               "signal, which is what separates moisture generated indoors from "
+               "moisture leaking in.",
+          overrides=[{"matcher": {"id": "byName", "options": "CO2"},
+                      "properties": [{"id": "thresholds", "value": CO2_STEPS},
+                                     {"id": "custom.thresholdsStyle", "value": {"mode": "area"}},
+                                     {"id": "custom.fillOpacity", "value": 0},
+                                     {"id": "custom.lineWidth", "value": 2}]}]),
+
+    panel(2, "PM2.5 indoors vs outdoors",
+          [("ag_pm02", "Indoor PM2.5"), ("sp_aq_outdoor_particles", "Outdoor particulates")],
+          {"h": 9, "w": 12, "x": 12, "y": 0},
+          desc="The gap between the lines is filtration doing its job. Indoor "
+               "tracking outdoor closely would mean particulates arrive faster "
+               "than the filter removes them. The two come from different sensors "
+               "on different scales, so compare shapes rather than subtracting.",
+          overrides=[
+              {"matcher": {"id": "byName", "options": "Indoor PM2.5"},
+               "properties": [{"id": "color", "value": {"mode": "fixed", "fixedColor": "blue"}},
+                              {"id": "thresholds", "value": PM25_STEPS}]},
+              color("Outdoor particulates", "orange"),
+          ]),
+
+    panel(3, "Particle sizes",
+          [("ag_pm01", "PM1"), ("ag_pm02", "PM2.5"), ("ag_pm10", "PM10")],
+          {"h": 8, "w": 12, "x": 0, "y": 9},
+          desc="PM1 rising while PM2.5 stays flat suggests combustion or cooking. "
+               "PM10 moving alone suggests dust, or activity stirring up settled "
+               "material.",
+          overrides=[color("PM1", "purple"), color("PM2.5", "blue"),
+                     color("PM10", "orange")]),
+
+    panel(4, "Chemical pollutants",
+          [("ag_tvoc_index", "TVOC index"), ("ag_nox_index", "NOx index")],
+          {"h": 8, "w": 12, "x": 12, "y": 9},
+          desc="Sensor indices, not concentrations: 100 is the running baseline "
+               "for this room, so excursions mark a change rather than an "
+               "absolute level. Useful for spotting cleaning products, cooking, "
+               "or off-gassing.",
+          overrides=[color("TVOC index", "green"), color("NOx index", "red")]),
+
+    panel(5, "Outdoor ozone", [("sp_aq_outdoor_ozone", "Ozone")],
+          {"h": 8, "w": 24, "x": 0, "y": 17}, unit="ppb",
+          desc="From the thermostat's outdoor feed. The EPA 8-hour standard is 70 "
+               "ppb. On high-ozone days the useful response is minimising outside "
+               "air, since a particulate filter does not remove ozone.",
+          overrides=[{"matcher": {"id": "byName", "options": "Ozone"},
+                      "properties": [{"id": "thresholds", "value": OZONE_STEPS},
+                                     {"id": "custom.thresholdsStyle", "value": {"mode": "area"}},
+                                     {"id": "custom.fillOpacity", "value": 0}]}]),
+
+    panel(6, "Room vs thermostat - temperature and humidity",
+          [("ag_temp_f", "AirGradient room"), ("indoor_f", "Thermostat"),
+           ("ag_rh", "Room RH"), ("hum_indoor", "Thermostat RH")],
+          {"h": 8, "w": 24, "x": 0, "y": 25},
+          desc="Two independent sensors in different places. The room reads "
+               "several degrees warmer than the thermostat, which matters because "
+               "at equal moisture the cooler location reports the higher relative "
+               "humidity. Compare ag_w_gr against indoor_w_gr on the "
+               "dehumidification dashboard to see moisture without that confound.",
+          overrides=[
+              {"matcher": {"id": "byName", "options": "AirGradient room"},
+               "properties": [{"id": "unit", "value": "fahrenheit"},
+                              {"id": "color", "value": {"mode": "fixed", "fixedColor": "orange"}}]},
+              {"matcher": {"id": "byName", "options": "Thermostat"},
+               "properties": [{"id": "unit", "value": "fahrenheit"},
+                              {"id": "color", "value": {"mode": "fixed", "fixedColor": "red"}}]},
+              {"matcher": {"id": "byName", "options": "Room RH"},
+               "properties": [{"id": "unit", "value": "percent"},
+                              {"id": "custom.axisPlacement", "value": "right"},
+                              {"id": "color", "value": {"mode": "fixed", "fixedColor": "blue"}}]},
+              {"matcher": {"id": "byName", "options": "Thermostat RH"},
+               "properties": [{"id": "unit", "value": "percent"},
+                              {"id": "custom.axisPlacement", "value": "right"},
+                              {"id": "color", "value": {"mode": "fixed", "fixedColor": "light-blue"}}]},
+          ]),
+]
+
+
 if __name__ == "__main__":
     import io
 
@@ -458,6 +568,14 @@ if __name__ == "__main__":
             "Temporary by design: retire or fold into Home once the question is settled.",
             DEHUM, refresh="5m", time_from="now-3d",
             tags=["daikin", "dehumidification"]),
+        "grafana/dashboard-air.json": dashboard(
+            "daikin-air",
+            "Daikin — Air Quality",
+            "Indoor air quality from the AirGradient monitor, with outdoor context "
+            "from the thermostat feed. Ongoing monitoring, unlike the "
+            "dehumidification investigation.",
+            AIR, refresh="5m", time_from="now-2d",
+            tags=["daikin", "air-quality"]),
         "grafana/dashboard-health.json": dashboard(
             "daikin-health",
             "Daikin — System Health & Diagnostics",

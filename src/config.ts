@@ -30,6 +30,11 @@ export interface Env {
   CG_CH_RETURN_RH: string;
   CG_CH_SUPPLY_TEMP: string;
 
+  // AirGradient indoor monitor. Token is a secret; the location id is a var.
+  // An absent token disables the poll.
+  AG_TOKEN: string;
+  AG_LOCATION_ID: string;
+
   // secrets
   DAIKIN_API_KEY: string;
   DAIKIN_EMAIL: string;

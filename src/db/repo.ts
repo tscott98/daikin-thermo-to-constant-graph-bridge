@@ -33,6 +33,14 @@ export interface Reading extends SkyportFields {
   duct_return_temp_f: number | null;
   duct_return_rh: number | null;
   duct_supply_temp_f: number | null;
+  ag_temp_c: number | null;
+  ag_rh: number | null;
+  ag_co2: number | null;
+  ag_pm02: number | null;
+  ag_pm01: number | null;
+  ag_pm10: number | null;
+  ag_tvoc_index: number | null;
+  ag_nox_index: number | null;
   raw: string | null;
   published: number;
 }
@@ -134,6 +142,14 @@ function rowToReading(r: Row): Reading {
     duct_return_temp_f: asNum(r['duct_return_temp_f']),
     duct_return_rh: asNum(r['duct_return_rh']),
     duct_supply_temp_f: asNum(r['duct_supply_temp_f']),
+    ag_temp_c: asNum(r['ag_temp_c']),
+    ag_rh: asNum(r['ag_rh']),
+    ag_co2: asNum(r['ag_co2']),
+    ag_pm02: asNum(r['ag_pm02']),
+    ag_pm01: asNum(r['ag_pm01']),
+    ag_pm10: asNum(r['ag_pm10']),
+    ag_tvoc_index: asNum(r['ag_tvoc_index']),
+    ag_nox_index: asNum(r['ag_nox_index']),
     raw: asStr(r['raw']),
     published: asNum(r['published']) ?? 0,
   };
@@ -180,6 +196,14 @@ export function toReading(
     duct_return_temp_f: null,
     duct_return_rh: null,
     duct_supply_temp_f: null,
+    ag_temp_c: null,
+    ag_rh: null,
+    ag_co2: null,
+    ag_pm02: null,
+    ag_pm01: null,
+    ag_pm10: null,
+    ag_tvoc_index: null,
+    ag_nox_index: null,
     raw: keepRaw ? JSON.stringify(detail) : null,
     published: 0,
   };
@@ -210,8 +234,9 @@ export async function insertReadings(db: Db, rows: Reading[]): Promise<number> {
       sp_fault_od_minor, sp_fault_ifc_critical, sp_fault_ifc_minor, sp_fault_stat_critical,
       sp_fault_stat_minor,
       duct_return_temp_f, duct_return_rh, duct_supply_temp_f,
+      ag_temp_c, ag_rh, ag_co2, ag_pm02, ag_pm01, ag_pm10, ag_tvoc_index, ag_nox_index,
       raw, published
-    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,0)`;
+    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,0)`;
 
   const statements: InStatement[] = rows.map((r) => ({
     sql,
@@ -234,6 +259,7 @@ export async function insertReadings(db: Db, rows: Reading[]): Promise<number> {
       r.sp_fault_od_minor, r.sp_fault_ifc_critical, r.sp_fault_ifc_minor, r.sp_fault_stat_critical,
       r.sp_fault_stat_minor,
       r.duct_return_temp_f, r.duct_return_rh, r.duct_supply_temp_f,
+      r.ag_temp_c, r.ag_rh, r.ag_co2, r.ag_pm02, r.ag_pm01, r.ag_pm10, r.ag_tvoc_index, r.ag_nox_index,
       r.raw,
     ],
   }));
@@ -574,6 +600,30 @@ function capacityClause(): string {
   ].join(',\n            ');
 }
 
+/**
+ * AirGradient columns, plus its own humidity ratio.
+ *
+ * The monitor sits in a room rather than in the return, and rooms stratify:
+ * measured here, it runs about 4F warmer than the thermostat while reporting
+ * roughly the same absolute moisture. Serving ag_w_gr alongside indoor_w_gr
+ * makes that comparison direct -- two sensors, one temperature-independent
+ * quantity, so any disagreement is real rather than a thermometer artefact.
+ */
+function airGradientClause(): string {
+  const w = humidityRatioSql('ag_temp_c', 'ag_rh');
+  return [
+    `ROUND(AVG(ag_temp_c) * 9.0 / 5.0 + 32.0, 1) AS ag_temp_f`,
+    `ROUND(AVG(ag_rh), 1) AS ag_rh`,
+    `ROUND(AVG(${w}), 1) AS ag_w_gr`,
+    `ROUND(AVG(ag_co2), 0) AS ag_co2`,
+    `ROUND(AVG(ag_pm02), 1) AS ag_pm02`,
+    `ROUND(AVG(ag_pm01), 1) AS ag_pm01`,
+    `ROUND(AVG(ag_pm10), 1) AS ag_pm10`,
+    `ROUND(AVG(ag_tvoc_index), 0) AS ag_tvoc_index`,
+    `ROUND(AVG(ag_nox_index), 0) AS ag_nox_index`,
+  ].join(',\n            ');
+}
+
 export function psychroClause(): string {
   const inW = humidityRatioSql('temp_indoor_c', 'hum_indoor');
   const outW = humidityRatioSql('temp_outdoor_c', 'hum_outdoor');
@@ -674,7 +724,8 @@ export async function getSeries(db: Db, o: SeriesOptions): Promise<Row[]> {
               OVER (PARTITION BY device_id ORDER BY (ts / ?))  AS compressor_runtime_delta,
             ${energyClause(sampleSec, rate)},
             ${psychroClause()},
-            ${capacityClause()}
+            ${capacityClause()},
+            ${airGradientClause()}
           FROM readings
           WHERE ${where.join(' AND ')}
           GROUP BY device_id, (ts / ?)

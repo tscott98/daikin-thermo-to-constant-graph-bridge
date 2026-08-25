@@ -1,6 +1,11 @@
 # Copy to .dev.vars and fill in. .dev.vars is gitignored; this example is not.
 # In production these are set with `wrangler secret put <NAME>` instead.
+#
+# On Windows, write this file as UTF-8 *without* a BOM. PowerShell's
+# `Out-File -Encoding utf8` adds one, which makes the first variable parse as
+# "\ufeffTURSO_DATABASE_URL" and silently not match.
 
+# --- required ---------------------------------------------------------------
 TURSO_DATABASE_URL=libsql://daikin-<your-org>.turso.io
 TURSO_AUTH_TOKEN=
 
@@ -14,3 +19,17 @@ CG_API_KEY=
 
 # Guards this Worker's own /api and /admin routes. Generate: openssl rand -hex 32
 READ_API_KEY=
+
+# --- optional: Daikin Skyport (power, compressor, refrigerant) ---------------
+# Mint the refresh token with ./scripts/get-refresh-token.sh. The account
+# password is never stored.
+DAIKIN_SKYPORT_EMAIL=
+DAIKIN_SKYPORT_REFRESH_TOKEN=
+
+# --- optional: duct sensors, read back out of ConstantGraph -----------------
+# A *read* key, which is a different credential from CG_API_KEY above.
+CG_READ_API_KEY=
+
+# --- optional: AirGradient indoor air quality -------------------------------
+# From https://app.airgradient.com/settings/place
+AG_TOKEN=

@@ -23,6 +23,7 @@ import { SkyportClient } from './skyport/client';
 import { skyportFields } from './skyport/map';
 import { skyportDeviceFields } from './skyport/device';
 import { SensorClient } from './sensors/client';
+import { AirGradientClient, EMPTY_AIRGRADIENT } from './sensors/airgradient';
 import { publishPending, type PublishOutcome } from './constantgraph/publish';
 
 const PRUNE_MARKER = 'prune:last';
@@ -38,6 +39,7 @@ export interface CycleResult {
   errors: string[];
   skyport: { attempted: number; enriched: number };
   ductSensors: 'off' | 'ok' | 'failed';
+  airGradient: 'off' | 'ok' | 'failed';
 }
 
 /**
@@ -93,6 +95,20 @@ export async function runCycle(env: Env, db: Db): Promise<CycleResult> {
     }
   }
 
+  // AirGradient describes the room, not a thermostat, so it is read once and
+  // shared across devices in the same way as the duct sensors.
+  let ag = EMPTY_AIRGRADIENT;
+  let agStatus: 'off' | 'ok' | 'failed' = 'off';
+  if (env.AG_TOKEN) {
+    try {
+      ag = await new AirGradientClient(env).read();
+      agStatus = 'ok';
+    } catch (err) {
+      agStatus = 'failed';
+      errors.push(`airgradient: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+
   const skyportEnabled = Boolean(env.DAIKIN_SKYPORT_REFRESH_TOKEN);
   const skyport = skyportEnabled ? new SkyportClient(env, db) : null;
   const skyportStats = { attempted: 0, enriched: 0 };
@@ -105,6 +121,14 @@ export async function runCycle(env: Env, db: Db): Promise<CycleResult> {
       row.duct_return_temp_f = duct.returnTempF;
       row.duct_return_rh = duct.returnRh;
       row.duct_supply_temp_f = duct.supplyTempF;
+      row.ag_temp_c = ag.tempC;
+      row.ag_rh = ag.rh;
+      row.ag_co2 = ag.co2;
+      row.ag_pm02 = ag.pm02;
+      row.ag_pm01 = ag.pm01;
+      row.ag_pm10 = ag.pm10;
+      row.ag_tvoc_index = ag.tvocIndex;
+      row.ag_nox_index = ag.noxIndex;
 
       if (skyport) {
         skyportStats.attempted += 1;
@@ -158,6 +182,7 @@ export async function runCycle(env: Env, db: Db): Promise<CycleResult> {
     errors,
     skyport: skyportStats,
     ductSensors: ductStatus,
+    airGradient: agStatus,
   };
 }
 

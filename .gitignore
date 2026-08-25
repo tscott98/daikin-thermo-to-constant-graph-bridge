@@ -26,3 +26,6 @@ __pycache__/
 
 # Transient annotation payloads
 .annotation*.json
+
+# Local AirGradient CSV exports; the bridge pulls this via the API
+air-gradient-export/

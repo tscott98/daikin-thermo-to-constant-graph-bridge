@@ -1,0 +1,840 @@
+{
+  "__inputs": [
+    {
+      "name": "DS_INFINITY",
+      "label": "Infinity data source",
+      "type": "datasource",
+      "pluginId": "yesoreyeram-infinity-datasource",
+      "pluginName": "Infinity",
+      "description": "Infinity data source pointing at your Worker's base URL."
+    }
+  ],
+  "__requires": [
+    {
+      "type": "datasource",
+      "id": "yesoreyeram-infinity-datasource",
+      "name": "Infinity",
+      "version": "1.0.0"
+    }
+  ],
+  "uid": "daikin-air",
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": {
+          "type": "grafana",
+          "uid": "-- Grafana --"
+        },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      },
+      {
+        "datasource": {
+          "type": "grafana",
+          "uid": "-- Grafana --"
+        },
+        "enable": true,
+        "hide": false,
+        "iconColor": "orange",
+        "name": "Config changes",
+        "target": {
+          "limit": 100,
+          "matchAny": false,
+          "tags": [
+            "daikin",
+            "config-change"
+          ],
+          "type": "tags"
+        }
+      }
+    ]
+  },
+  "title": "Daikin \u2014 Air Quality",
+  "description": "Indoor air quality from the AirGradient monitor, with outdoor context from the thermostat feed. Ongoing monitoring, unlike the dehumidification investigation.",
+  "schemaVersion": 39,
+  "editable": true,
+  "graphTooltip": 1,
+  "refresh": "5m",
+  "time": {
+    "from": "now-2d",
+    "to": "now"
+  },
+  "timezone": "browser",
+  "tags": [
+    "daikin",
+    "air-quality"
+  ],
+  "templating": {
+    "list": [
+      {
+        "name": "device",
+        "label": "Device ID",
+        "type": "textbox",
+        "query": "",
+        "current": {
+          "text": "",
+          "value": ""
+        },
+        "description": "Optional. Blank for all thermostats; IDs from /api/stats.",
+        "hide": 0,
+        "skipUrlSync": false
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "title": "CO2 - ventilation and occupancy",
+      "type": "timeseries",
+      "datasource": {
+        "type": "yesoreyeram-infinity-datasource",
+        "uid": "${DS_INFINITY}"
+      },
+      "description": "Outdoor air is about 420 ppm, so the excess over that is your own breath accumulating. Below 800 is comfortable; above 1200 has measurable effects on concentration. It doubles as an occupancy signal, which is what separates moisture generated indoors from moisture leaking in.",
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 0,
+        "y": 0
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "${DS_INFINITY}"
+          },
+          "type": "json",
+          "source": "url",
+          "parser": "backend",
+          "format": "timeseries",
+          "url": "/api/series?from=$__from&to=$__to&interval=$__interval_ms&device=$device",
+          "url_options": {
+            "method": "GET"
+          },
+          "root_selector": "",
+          "columns": [
+            {
+              "selector": "time",
+              "text": "time",
+              "type": "timestamp"
+            },
+            {
+              "selector": "ag_co2",
+              "text": "CO2",
+              "type": "number"
+            }
+          ],
+          "filters": []
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ppm",
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 6
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "CO2"
+            },
+            "properties": [
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": null
+                    },
+                    {
+                      "color": "yellow",
+                      "value": 800
+                    },
+                    {
+                      "color": "orange",
+                      "value": 1200
+                    },
+                    {
+                      "color": "red",
+                      "value": 2000
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "custom.thresholdsStyle",
+                "value": {
+                  "mode": "area"
+                }
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 0
+              },
+              {
+                "id": "custom.lineWidth",
+                "value": 2
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      }
+    },
+    {
+      "id": 2,
+      "title": "PM2.5 indoors vs outdoors",
+      "type": "timeseries",
+      "datasource": {
+        "type": "yesoreyeram-infinity-datasource",
+        "uid": "${DS_INFINITY}"
+      },
+      "description": "The gap between the lines is filtration doing its job. Indoor tracking outdoor closely would mean particulates arrive faster than the filter removes them. The two come from different sensors on different scales, so compare shapes rather than subtracting.",
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 12,
+        "y": 0
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "${DS_INFINITY}"
+          },
+          "type": "json",
+          "source": "url",
+          "parser": "backend",
+          "format": "timeseries",
+          "url": "/api/series?from=$__from&to=$__to&interval=$__interval_ms&device=$device",
+          "url_options": {
+            "method": "GET"
+          },
+          "root_selector": "",
+          "columns": [
+            {
+              "selector": "time",
+              "text": "time",
+              "type": "timestamp"
+            },
+            {
+              "selector": "ag_pm02",
+              "text": "Indoor PM2.5",
+              "type": "number"
+            },
+            {
+              "selector": "sp_aq_outdoor_particles",
+              "text": "Outdoor particulates",
+              "type": "number"
+            }
+          ],
+          "filters": []
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "",
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 6
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Indoor PM2.5"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "blue"
+                }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": null
+                    },
+                    {
+                      "color": "yellow",
+                      "value": 12
+                    },
+                    {
+                      "color": "orange",
+                      "value": 35.5
+                    },
+                    {
+                      "color": "red",
+                      "value": 55.5
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Outdoor particulates"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "orange"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      }
+    },
+    {
+      "id": 3,
+      "title": "Particle sizes",
+      "type": "timeseries",
+      "datasource": {
+        "type": "yesoreyeram-infinity-datasource",
+        "uid": "${DS_INFINITY}"
+      },
+      "description": "PM1 rising while PM2.5 stays flat suggests combustion or cooking. PM10 moving alone suggests dust, or activity stirring up settled material.",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 9
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "${DS_INFINITY}"
+          },
+          "type": "json",
+          "source": "url",
+          "parser": "backend",
+          "format": "timeseries",
+          "url": "/api/series?from=$__from&to=$__to&interval=$__interval_ms&device=$device",
+          "url_options": {
+            "method": "GET"
+          },
+          "root_selector": "",
+          "columns": [
+            {
+              "selector": "time",
+              "text": "time",
+              "type": "timestamp"
+            },
+            {
+              "selector": "ag_pm01",
+              "text": "PM1",
+              "type": "number"
+            },
+            {
+              "selector": "ag_pm02",
+              "text": "PM2.5",
+              "type": "number"
+            },
+            {
+              "selector": "ag_pm10",
+              "text": "PM10",
+              "type": "number"
+            }
+          ],
+          "filters": []
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "",
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 6
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "PM1"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "purple"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "PM2.5"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "blue"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "PM10"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "orange"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      }
+    },
+    {
+      "id": 4,
+      "title": "Chemical pollutants",
+      "type": "timeseries",
+      "datasource": {
+        "type": "yesoreyeram-infinity-datasource",
+        "uid": "${DS_INFINITY}"
+      },
+      "description": "Sensor indices, not concentrations: 100 is the running baseline for this room, so excursions mark a change rather than an absolute level. Useful for spotting cleaning products, cooking, or off-gassing.",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 9
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "${DS_INFINITY}"
+          },
+          "type": "json",
+          "source": "url",
+          "parser": "backend",
+          "format": "timeseries",
+          "url": "/api/series?from=$__from&to=$__to&interval=$__interval_ms&device=$device",
+          "url_options": {
+            "method": "GET"
+          },
+          "root_selector": "",
+          "columns": [
+            {
+              "selector": "time",
+              "text": "time",
+              "type": "timestamp"
+            },
+            {
+              "selector": "ag_tvoc_index",
+              "text": "TVOC index",
+              "type": "number"
+            },
+            {
+              "selector": "ag_nox_index",
+              "text": "NOx index",
+              "type": "number"
+            }
+          ],
+          "filters": []
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "",
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 6
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "TVOC index"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "green"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "NOx index"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "red"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      }
+    },
+    {
+      "id": 5,
+      "title": "Outdoor ozone",
+      "type": "timeseries",
+      "datasource": {
+        "type": "yesoreyeram-infinity-datasource",
+        "uid": "${DS_INFINITY}"
+      },
+      "description": "From the thermostat's outdoor feed. The EPA 8-hour standard is 70 ppb. On high-ozone days the useful response is minimising outside air, since a particulate filter does not remove ozone.",
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 17
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "${DS_INFINITY}"
+          },
+          "type": "json",
+          "source": "url",
+          "parser": "backend",
+          "format": "timeseries",
+          "url": "/api/series?from=$__from&to=$__to&interval=$__interval_ms&device=$device",
+          "url_options": {
+            "method": "GET"
+          },
+          "root_selector": "",
+          "columns": [
+            {
+              "selector": "time",
+              "text": "time",
+              "type": "timestamp"
+            },
+            {
+              "selector": "sp_aq_outdoor_ozone",
+              "text": "Ozone",
+              "type": "number"
+            }
+          ],
+          "filters": []
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ppb",
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 6
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Ozone"
+            },
+            "properties": [
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": null
+                    },
+                    {
+                      "color": "yellow",
+                      "value": 55
+                    },
+                    {
+                      "color": "orange",
+                      "value": 71
+                    },
+                    {
+                      "color": "red",
+                      "value": 86
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "custom.thresholdsStyle",
+                "value": {
+                  "mode": "area"
+                }
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 0
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      }
+    },
+    {
+      "id": 6,
+      "title": "Room vs thermostat - temperature and humidity",
+      "type": "timeseries",
+      "datasource": {
+        "type": "yesoreyeram-infinity-datasource",
+        "uid": "${DS_INFINITY}"
+      },
+      "description": "Two independent sensors in different places. The room reads several degrees warmer than the thermostat, which matters because at equal moisture the cooler location reports the higher relative humidity. Compare ag_w_gr against indoor_w_gr on the dehumidification dashboard to see moisture without that confound.",
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 25
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "${DS_INFINITY}"
+          },
+          "type": "json",
+          "source": "url",
+          "parser": "backend",
+          "format": "timeseries",
+          "url": "/api/series?from=$__from&to=$__to&interval=$__interval_ms&device=$device",
+          "url_options": {
+            "method": "GET"
+          },
+          "root_selector": "",
+          "columns": [
+            {
+              "selector": "time",
+              "text": "time",
+              "type": "timestamp"
+            },
+            {
+              "selector": "ag_temp_f",
+              "text": "AirGradient room",
+              "type": "number"
+            },
+            {
+              "selector": "indoor_f",
+              "text": "Thermostat",
+              "type": "number"
+            },
+            {
+              "selector": "ag_rh",
+              "text": "Room RH",
+              "type": "number"
+            },
+            {
+              "selector": "hum_indoor",
+              "text": "Thermostat RH",
+              "type": "number"
+            }
+          ],
+          "filters": []
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "",
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 6
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "AirGradient room"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "fahrenheit"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "orange"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Thermostat"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "fahrenheit"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "red"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Room RH"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "percent"
+              },
+              {
+                "id": "custom.axisPlacement",
+                "value": "right"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "blue"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Thermostat RH"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "percent"
+              },
+              {
+                "id": "custom.axisPlacement",
+                "value": "right"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "light-blue"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      }
+    }
+  ]
+}
