@@ -30,6 +30,9 @@ export interface Reading extends SkyportFields {
   fan_circulate: number | null;
   fan_circulate_spd: number | null;
   schedule_enabled: number | null;
+  duct_return_temp_f: number | null;
+  duct_return_rh: number | null;
+  duct_supply_temp_f: number | null;
   raw: string | null;
   published: number;
 }
@@ -128,6 +131,9 @@ function rowToReading(r: Row): Reading {
     sp_fault_ifc_minor: asNum(r['sp_fault_ifc_minor']),
     sp_fault_stat_critical: asNum(r['sp_fault_stat_critical']),
     sp_fault_stat_minor: asNum(r['sp_fault_stat_minor']),
+    duct_return_temp_f: asNum(r['duct_return_temp_f']),
+    duct_return_rh: asNum(r['duct_return_rh']),
+    duct_supply_temp_f: asNum(r['duct_supply_temp_f']),
     raw: asStr(r['raw']),
     published: asNum(r['published']) ?? 0,
   };
@@ -171,6 +177,9 @@ export function toReading(
     fan_circulate_spd: num(detail.fanCirculateSpeed),
     schedule_enabled: bool(detail.scheduleEnabled),
     ...EMPTY_SKYPORT,
+    duct_return_temp_f: null,
+    duct_return_rh: null,
+    duct_supply_temp_f: null,
     raw: keepRaw ? JSON.stringify(detail) : null,
     published: 0,
   };
@@ -200,8 +209,9 @@ export async function insertReadings(db: Db, rows: Reading[]): Promise<number> {
       sp_requested_airflow, sp_fan_actual_pct, sp_compressor_reduction, sp_fault_od_critical,
       sp_fault_od_minor, sp_fault_ifc_critical, sp_fault_ifc_minor, sp_fault_stat_critical,
       sp_fault_stat_minor,
+      duct_return_temp_f, duct_return_rh, duct_supply_temp_f,
       raw, published
-    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,0)`;
+    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,0)`;
 
   const statements: InStatement[] = rows.map((r) => ({
     sql,
@@ -223,6 +233,7 @@ export async function insertReadings(db: Db, rows: Reading[]): Promise<number> {
       r.sp_requested_airflow, r.sp_fan_actual_pct, r.sp_compressor_reduction, r.sp_fault_od_critical,
       r.sp_fault_od_minor, r.sp_fault_ifc_critical, r.sp_fault_ifc_minor, r.sp_fault_stat_critical,
       r.sp_fault_stat_minor,
+      r.duct_return_temp_f, r.duct_return_rh, r.duct_supply_temp_f,
       r.raw,
     ],
   }));
@@ -502,6 +513,67 @@ function r410aSatFSql(psig: string): string {
   return `CASE WHEN ${psig} < ${pts[0]![0]} THEN NULL ${arms.join(' ')} ELSE NULL END`;
 }
 
+/**
+ * Capacity from the duct sensors.
+ *
+ * Sensible heat is exact: 1.08 x CFM x dry-bulb split, needing only the two
+ * temperatures. Latent is not, because there is no humidity sensor at the
+ * supply. Air leaving a wet coil sits near saturation, so supply humidity ratio
+ * is estimated at 95% RH -- standard practice, usually within a few percent,
+ * and named "_est" so the assumption travels with the number.
+ *
+ * The estimate is gated on a physical check: if supply dry bulb is at or above
+ * the return dew point, no condensation is visible at the probe and latent is
+ * reported as zero.
+ *
+ * IMPORTANT: with the probe at a register rather than the plenum, that gate is
+ * conservative to the point of being wrong about latent. Air leaves the coil
+ * around 45-48F, below the dew point and condensing, then warms through the
+ * duct run; a register at the end of a branch can read above the dew point
+ * while the coil is condensing hard. Observed here: supply 53.6F against a
+ * return dew point of 52.0F, while dehumidification demand was 85% and indoor
+ * humidity ratio sat at half of outdoor. So latent_btuh_est and shr_est are a
+ * floor, not a measurement, and shr_est of 1.0 means "no condensation at the
+ * probe", not "no dehumidification". condensing_margin_f is the honest version
+ * of the same signal: how far the supply probe sits from the dew point.
+ *
+ * duct_split_f and sensible_btuh are trustworthy, subject to two biases: duct
+ * gain makes the split read small, and CFM is the equipment's own figure rather
+ * than measured airflow.
+ */
+function capacityClause(): string {
+  const rtC = '(duct_return_temp_f - 32.0) * 5.0 / 9.0';
+  const stC = '(duct_supply_temp_f - 32.0) * 5.0 / 9.0';
+  const returnW = humidityRatioSql(`(${rtC})`, 'duct_return_rh');
+  // Supply assumed at 95% RH: the coil is wet whenever it is condensing.
+  const supplyW = humidityRatioSql(`(${stC})`, '95.0');
+  const dewC = `(243.04 * (ln(duct_return_rh / 100.0) + 17.625 * (${rtC}) / (243.04 + (${rtC})))` +
+               ` / (17.625 - (ln(duct_return_rh / 100.0) + 17.625 * (${rtC}) / (243.04 + (${rtC})))))`;
+  const dewF = `((${dewC}) * 9.0 / 5.0 + 32.0)`;
+
+  const split = '(duct_return_temp_f - duct_supply_temp_f)';
+  const sensible = `1.08 * sp_indoor_airflow * ${split}`;
+  // Only credit latent while the coil can actually condense.
+  const latent = `CASE WHEN duct_supply_temp_f < ${dewF}
+                       THEN 0.68 * sp_indoor_airflow * ((${returnW}) - (${supplyW}))
+                       ELSE 0 END`;
+
+  return [
+    `ROUND(AVG(${split}), 1) AS duct_split_f`,
+    `ROUND(AVG(${dewF}), 1) AS return_dewpoint_f`,
+    // Negative means condensation is visible at the probe. Small positive is
+    // the expected reading for a register at the end of a run while the coil
+    // is still condensing, so treat the trend as the signal.
+    `ROUND(AVG(duct_supply_temp_f - (${dewF})), 1) AS condensing_margin_f`,
+    `ROUND(AVG(${sensible}), 0) AS sensible_btuh`,
+    `ROUND(AVG(${latent}), 0) AS latent_btuh_est`,
+    `ROUND(AVG(CASE WHEN (${sensible}) + (${latent}) > 0
+                    THEN (${sensible}) / ((${sensible}) + (${latent})) END), 3) AS shr_est`,
+    `ROUND(AVG(CASE WHEN sp_outdoor_power > 100
+                    THEN ((${sensible}) + (${latent})) / sp_outdoor_power END), 2) AS eer_est`,
+  ].join(',\n            ');
+}
+
 export function psychroClause(): string {
   const inW = humidityRatioSql('temp_indoor_c', 'hum_indoor');
   const outW = humidityRatioSql('temp_outdoor_c', 'hum_outdoor');
@@ -601,7 +673,8 @@ export async function getSeries(db: Db, o: SeriesOptions): Promise<Row[]> {
             MAX(sp_compressor_runtime) - LAG(MAX(sp_compressor_runtime))
               OVER (PARTITION BY device_id ORDER BY (ts / ?))  AS compressor_runtime_delta,
             ${energyClause(sampleSec, rate)},
-            ${psychroClause()}
+            ${psychroClause()},
+            ${capacityClause()}
           FROM readings
           WHERE ${where.join(' AND ')}
           GROUP BY device_id, (ts / ?)

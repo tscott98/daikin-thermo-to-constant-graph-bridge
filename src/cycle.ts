@@ -22,6 +22,7 @@ import { DaikinClient } from './daikin/client';
 import { SkyportClient } from './skyport/client';
 import { skyportFields } from './skyport/map';
 import { skyportDeviceFields } from './skyport/device';
+import { SensorClient } from './sensors/client';
 import { publishPending, type PublishOutcome } from './constantgraph/publish';
 
 const PRUNE_MARKER = 'prune:last';
@@ -36,6 +37,7 @@ export interface CycleResult {
   pruned: number;
   errors: string[];
   skyport: { attempted: number; enriched: number };
+  ductSensors: 'off' | 'ok' | 'failed';
 }
 
 /**
@@ -76,6 +78,21 @@ export async function runCycle(env: Env, db: Db): Promise<CycleResult> {
   // Supplementary consumer-API poll. Optional by design: without a refresh
   // token it is skipped entirely, and any failure degrades to null columns
   // rather than costing us the integrator reading.
+  // Duct sensors are read once per cycle and shared across devices: they
+  // describe the air handler, not any individual thermostat.
+  let duct = { returnTempF: null as number | null, returnRh: null as number | null,
+               supplyTempF: null as number | null };
+  let ductStatus: 'off' | 'ok' | 'failed' = 'off';
+  if (env.CG_READ_API_KEY) {
+    try {
+      duct = await new SensorClient(env).read();
+      ductStatus = 'ok';
+    } catch (err) {
+      ductStatus = 'failed';
+      errors.push(`duct sensors: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+
   const skyportEnabled = Boolean(env.DAIKIN_SKYPORT_REFRESH_TOKEN);
   const skyport = skyportEnabled ? new SkyportClient(env, db) : null;
   const skyportStats = { attempted: 0, enriched: 0 };
@@ -85,6 +102,9 @@ export async function runCycle(env: Env, db: Db): Promise<CycleResult> {
     try {
       const detail = await daikin.getDevice(device.id);
       const row = toReading(device.id, ts, detail, settings.rawRetentionDays > 0);
+      row.duct_return_temp_f = duct.returnTempF;
+      row.duct_return_rh = duct.returnRh;
+      row.duct_supply_temp_f = duct.supplyTempF;
 
       if (skyport) {
         skyportStats.attempted += 1;
@@ -137,6 +157,7 @@ export async function runCycle(env: Env, db: Db): Promise<CycleResult> {
     pruned,
     errors,
     skyport: skyportStats,
+    ductSensors: ductStatus,
   };
 }
 

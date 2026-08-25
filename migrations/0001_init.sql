@@ -75,6 +75,9 @@ CREATE TABLE IF NOT EXISTS readings (
   sp_fault_ifc_minor       REAL,
   sp_fault_stat_critical   REAL,
   sp_fault_stat_minor      REAL,
+  duct_return_temp_f       REAL,
+  duct_return_rh           REAL,
+  duct_supply_temp_f       REAL,
   raw               TEXT,
   published         INTEGER NOT NULL DEFAULT 0,
   PRIMARY KEY (device_id, ts)

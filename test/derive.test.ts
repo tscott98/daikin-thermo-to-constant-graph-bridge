@@ -24,6 +24,9 @@ const reading = (over: Partial<Reading> = {}): Reading => ({
   raw: null,
   published: 0,
   ...EMPTY_SKYPORT,
+  duct_return_temp_f: null,
+  duct_return_rh: null,
+  duct_supply_temp_f: null,
   ...over,
 });
 

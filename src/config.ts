@@ -22,6 +22,14 @@ export interface Env {
   RATE_PER_KWH: string;
   CG_APP_NAME: string;
 
+  // Duct sensors published into ConstantGraph by SmartThings, read back via the
+  // read API. Channel 0 or an absent read key disables the whole sensor poll.
+  CG_READ_API_KEY: string;
+  CG_SENSOR_NODE: string;
+  CG_CH_RETURN_TEMP: string;
+  CG_CH_RETURN_RH: string;
+  CG_CH_SUPPLY_TEMP: string;
+
   // secrets
   DAIKIN_API_KEY: string;
   DAIKIN_EMAIL: string;

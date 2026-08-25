@@ -23,6 +23,14 @@ DRY_RUN = "false"
 RATE_PER_KWH = "0.14"
 CG_APP_NAME = "daikin-one-bridge"
 
+# Duct sensors read back out of ConstantGraph. Node is the location the sensors
+# publish to, which is not the location this bridge writes to. Set any channel
+# to 0 to skip it.
+CG_SENSOR_NODE = "1"
+CG_CH_RETURN_TEMP = "124"
+CG_CH_RETURN_RH = "125"
+CG_CH_SUPPLY_TEMP = "39"
+
 # Secrets (set with `wrangler secret put <NAME>`, never committed):
 #   TURSO_DATABASE_URL       libsql://<db>-<org>.turso.io
 #   TURSO_AUTH_TOKEN         from `turso db tokens create daikin`
