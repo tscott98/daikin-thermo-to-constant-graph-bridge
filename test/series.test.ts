@@ -71,3 +71,23 @@ describe('skyportSelectClause', () => {
     });
   });
 });
+
+describe('getSeries column qualification', () => {
+  it('qualifies every readings column that air_quality also has', async () => {
+    // air_quality carries its own ts, so once /api/series LEFT JOINs it any
+    // bare `ts` is ambiguous and SQLite rejects the whole statement. That broke
+    // every /api/series panel at once and typechecking could not see it.
+    const src = await import('node:fs').then((fs) =>
+      fs.readFileSync('src/db/repo.ts', 'utf8'),
+    );
+    const start = src.indexOf('export async function getSeries');
+    const body = src.slice(start, src.indexOf('return res.rows;', start));
+
+    expect(body).toContain('LEFT JOIN air_quality aq ON aq.ts = r.ts');
+    // A bare `ts` used as a column reference is the bug. `AS ts` is an output
+    // alias, not a reference, so it is excluded.
+    const bare = body.match(/(?<!AS )(?<![.\w])ts\s*(?:\/|>=|<=|ASC)/g) ?? [];
+    expect(bare).toEqual([]);
+    expect(body).toContain("const where = ['r.ts >= ?', 'r.ts <= ?'];");
+  });
+});

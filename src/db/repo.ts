@@ -661,7 +661,7 @@ export async function getSeries(db: Db, o: SeriesOptions): Promise<Row[]> {
   const bucket = Math.max(1, Math.floor(o.bucketSec));
   const sampleSec = Math.max(1, Math.floor(o.sampleIntervalSec ?? 300));
   const rate = Number.isFinite(o.ratePerKwh) && (o.ratePerKwh ?? 0) > 0 ? (o.ratePerKwh as number) : 0;
-  const where = ['ts >= ?', 'ts <= ?'];
+  const where = ['r.ts >= ?', 'r.ts <= ?'];
 
   // Placeholders bind by position in the statement text, not by logical order,
   // so these must follow the order the ? marks appear when reading the SQL top
@@ -670,15 +670,15 @@ export async function getSeries(db: Db, o: SeriesOptions): Promise<Row[]> {
   const args: Array<string | number> = [bucket, bucket, bucket, o.fromTs, o.toTs];
 
   if (o.deviceId) {
-    where.push('device_id = ?');
+    where.push('r.device_id = ?');
     args.push(o.deviceId);
   }
   args.push(bucket, o.limit);
 
   const res = await db.execute({
     sql: `SELECT
-            device_id,
-            (ts / ?) * ?                                            AS ts,
+            r.device_id,
+            (r.ts / ?) * ?                                            AS ts,
             COUNT(*)                                                AS samples,
             ROUND(AVG(temp_indoor_c)   * 9 / 5 + 32, 2)             AS indoor_f,
             ROUND(AVG(temp_outdoor_c)  * 9 / 5 + 32, 2)             AS outdoor_f,
@@ -695,7 +695,7 @@ export async function getSeries(db: Db, o: SeriesOptions): Promise<Row[]> {
                                                                     AS pct_running,
             ${skyportSelectClause()},
             MAX(sp_compressor_runtime) - LAG(MAX(sp_compressor_runtime))
-              OVER (PARTITION BY device_id ORDER BY (ts / ?))  AS compressor_runtime_delta,
+              OVER (PARTITION BY r.device_id ORDER BY (r.ts / ?))  AS compressor_runtime_delta,
             ${energyClause(sampleSec, rate)},
             ${psychroClause()},
             ${capacityClause()},
@@ -703,8 +703,8 @@ export async function getSeries(db: Db, o: SeriesOptions): Promise<Row[]> {
           FROM readings r
           LEFT JOIN air_quality aq ON aq.ts = r.ts
           WHERE ${where.join(' AND ')}
-          GROUP BY device_id, (ts / ?)
-          ORDER BY ts ASC
+          GROUP BY r.device_id, (r.ts / ?)
+          ORDER BY r.ts ASC
           LIMIT ?`,
     args,
   });
