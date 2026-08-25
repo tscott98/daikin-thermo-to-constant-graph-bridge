@@ -12,7 +12,7 @@ describe('skyportSelectClause', () => {
   it('projects every Skyport column, and the spiky ones twice', () => {
     // Outdoor ozone and particulates get a _max alongside the mean, so a
     // short excursion is not averaged out of existence at wide zoom.
-    const spiky = ['sp_aq_outdoor_ozone', 'sp_aq_outdoor_particles'];
+    const spiky = ['sp_aq_outdoor_ozone', 'sp_aq_outdoor_particles', 'sp_aq_outdoor_aqi'];
     const aliases = skyportSelectClause().map(aliasOf);
     for (const c of SKYPORT_COLUMNS) {
       const hit = aliases.filter((a) => a === c || a === `${c}_f`

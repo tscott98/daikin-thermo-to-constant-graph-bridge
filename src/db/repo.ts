@@ -402,6 +402,12 @@ const SKYPORT_DECIAMPS = new Set<string>([
  */
 const SKYPORT_UNCALIBRATED = new Set<string>([
   'sp_eev_superheat',
+  // Same unverified scale as its sibling: reads ~250 where superheat reads
+  // ~354. Plausibly tenths F, which would make it 25 F of subcooling -- high
+  // but not absurd -- though the same reasoning made superheat look like 35 F
+  // and that has never been confirmed. A bare name would imply a unit we do
+  // not have, so it ships suffixed like the others.
+  'sp_eev_subcool',
   'sp_inverter_fin_temp',
   'sp_indoor_power',
 ]);
@@ -596,7 +602,11 @@ export function psychroClause(): string[] {
  * charting an indoor peak against an outdoor average would make filtration
  * look worse than it is.
  */
-const SKYPORT_SPIKY = new Set(['sp_aq_outdoor_ozone', 'sp_aq_outdoor_particles']);
+const SKYPORT_SPIKY = new Set([
+  'sp_aq_outdoor_ozone',
+  'sp_aq_outdoor_particles',
+  'sp_aq_outdoor_aqi',
+]);
 
 export function skyportSelectClause(): string[] {
   return SKYPORT_COLUMNS.flatMap((c) => {
@@ -645,6 +655,28 @@ function energyClause(sampleSec: number, rate: number): string[] {
   return [`${kwh} AS energy_kwh`, `${cost} AS cost`];
 }
 
+/**
+ * Measurements expressed as a fraction of what this equipment can do.
+ *
+ * "624 CFM" and "68 RPS" mean nothing without knowing the machine. Against a
+ * 1760 CFM blower and a 73.0 RPS ceiling they become 35% and 93%, which is the
+ * form the question is actually asked in -- is it loafing, or is it maxed?
+ *
+ * The capability figures live on devices, hence the join. Compressor percent
+ * can legitimately exceed 100: the ceiling is a setting, and boost mode
+ * overrides it, which is why speeds above it were observed.
+ */
+function capabilityClause(): string[] {
+  return [
+    `ROUND(AVG(CASE WHEN d.sp_blower_max_cfm > 0
+                    THEN sp_indoor_airflow * 100.0 / d.sp_blower_max_cfm END), 1)
+       AS airflow_pct_max`,
+    `ROUND(AVG(CASE WHEN d.sp_cool_max_rps > 0
+                    THEN sp_compressor_rps * 1000.0 / d.sp_cool_max_rps END), 1)
+       AS compressor_pct_max`,
+  ];
+}
+
 /** The output name a select expression binds to, i.e. its trailing alias. */
 export function aliasOf(expr: string): string | null {
   return /\bAS\s+([A-Za-z_]\w*)\s*$/.exec(expr)?.[1] ?? null;
@@ -678,6 +710,7 @@ export function buildSelects(sampleSec = 300, rate = 0, bucket = 300): string[] 
     ...psychroClause(),
     ...capacityClause(),
     ...airGradientClause(),
+    ...capabilityClause(),
   ];
 }
 
@@ -718,6 +751,7 @@ export async function getSeries(db: Db, o: SeriesOptions): Promise<Row[]> {
             COUNT(*) AS samples${wanted.length > 0 ? ',\n            ' : ''}${wanted.join(',\n            ')}
           FROM readings r
           LEFT JOIN air_quality aq ON aq.ts = r.ts
+          LEFT JOIN devices d ON d.id = r.device_id
           WHERE ${where.join(' AND ')}
           GROUP BY r.device_id, (r.ts / ${bucket})
           ORDER BY r.ts ASC

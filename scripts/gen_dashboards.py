@@ -612,6 +612,140 @@ AIR = [
 ]
 
 
+
+
+# ---------------------------------------------------------------- Additions
+# Panels for the fields added by migration 0009, plus the two derived
+# capability columns. Appended with += to match how the lists above are
+# extended, rather than editing the comprehension that builds the fault stats.
+
+HEALTH += [
+panel(25, "Superheat and subcooling - the charge pair",
+          [("sp_eev_superheat_raw", "Superheat"), ("sp_eev_subcool_raw", "Subcooling")],
+          {"h": 9, "w": 12, "x": 0, "y": 40},
+          desc="Neither number diagnoses a charge problem alone; the pair does. "
+               "Superheat high with subcooling low points at undercharge or a "
+               "starved evaporator. Superheat low with subcooling high points at "
+               "overcharge or a restriction. Both moving together usually means "
+               "load changed, not the charge. Raw units on both -- the scale is "
+               "unverified, so read the shapes and the divergence rather than "
+               "the absolute values.",
+          overrides=[color("Superheat", "orange"), color("Subcooling", "blue")]),
+
+    panel(26, "Outdoor fan - commanded vs actual",
+          [("sp_od_fan_demand_pct", "Commanded"), ("sp_od_fan_rpm", "Actual RPM")],
+          {"h": 9, "w": 12, "x": 12, "y": 40},
+          desc="A fan pinned at full RPM while commanded demand sits well below "
+               "it, or the reverse, is the signature of a failing motor or a "
+               "control fault. The two axes are different units, so watch "
+               "whether they move together, not whether they overlap.",
+          overrides=[
+              {"matcher": {"id": "byName", "options": "Commanded"},
+               "properties": [{"id": "unit", "value": "percent"},
+                              {"id": "color", "value": {"mode": "fixed", "fixedColor": "green"}}]},
+              {"matcher": {"id": "byName", "options": "Actual RPM"},
+               "properties": [{"id": "unit", "value": "rotrpm"},
+                              {"id": "custom.axisPlacement", "value": "right"},
+                              {"id": "color", "value": {"mode": "fixed", "fixedColor": "purple"}}]},
+          ]),
+
+    panel(27, "Coil pressure vs suction pressure",
+          [("sp_eev_coil_pressure", "Indoor coil"), ("sp_suction_pressure", "Suction line")],
+          {"h": 8, "w": 12, "x": 0, "y": 49}, unit="pressurepsi",
+          desc="These read within a few psi of each other, which is expected on "
+               "a single-circuit system -- they are near the same point in the "
+               "loop. The panel exists to catch them diverging: a growing gap "
+               "means pressure drop between the coil and the suction sensor, "
+               "which is a restriction forming.",
+          overrides=[color("Indoor coil", "blue"), color("Suction line", "orange")]),
+
+    panel(28, "Filter life", [("sp_filter_days", "Days used")],
+          {"h": 8, "w": 6, "x": 12, "y": 49}, unit="d", ptype="stat", fmt="table",
+          opts=STAT_OPTS,
+          desc="Days elapsed against the 183-day service interval. Confirmed to "
+               "count up rather than down, so this is age, not remaining life. "
+               "Relevant beyond maintenance: a loaded filter is one of the "
+               "candidate explanations for airflow running under commanded, and "
+               "a new filter rules it out.",
+          thresholds={"mode": "absolute", "steps": [
+              {"color": "green", "value": None},
+              {"color": "yellow", "value": 150},
+              {"color": "red", "value": 183}]}),
+
+    panel(29, "Most recent fault log entry", [("sp_fault1_code", "Code")],
+          {"h": 8, "w": 6, "x": 18, "y": 49}, ptype="stat", fmt="table",
+          opts=STAT_OPTS,
+          desc="The thermostat's fault LOG, not its current state -- this stays "
+               "populated long after the condition clears. The six fault stats "
+               "at the top of this dashboard are what say whether anything is "
+               "wrong now; this says what went wrong last. Alerting is on those, "
+               "deliberately not on this.",
+          thresholds={"mode": "absolute", "steps": [{"color": "text", "value": None}]}),
+]
+
+DEHUM += [
+panel(11, "Capability - how hard is each half working?",
+          [("compressor_pct_max", "Compressor"), ("airflow_pct_max", "Airflow")],
+          {"h": 9, "w": 24, "x": 0, "y": 43}, unit="percent",
+          desc="Both as a percentage of what this equipment can do, from the "
+               "blower's rated CFM and the configured compressor ceiling. This "
+               "is the dehumidification story in one chart: a high compressor "
+               "percentage against a low airflow percentage means a cold coil "
+               "with little air over it, which is the condition that removes "
+               "moisture. Compressor can exceed 100 -- the ceiling is a setting "
+               "and boost mode overrides it.",
+          overrides=[color("Compressor", "red"), color("Airflow", "blue")]),
+
+    panel(12, "Thermostat calibration - sensor vs reported",
+          [("sp_tstat_raw_temp", "Sensor raw"), ("sp_tstat_calc_temp", "Reported"),
+           ("ag_temp_f", "AirGradient room")],
+          {"h": 9, "w": 24, "x": 0, "y": 52},
+          desc="The thermostat subtracts about 5 C from its own sensor before "
+               "reporting. That correction is why the room sensor looks like it "
+               "disagrees with the thermostat -- compare the room against the "
+               "raw line rather than the reported one. It matters here because "
+               "relative humidity is only meaningful against the temperature it "
+               "was measured at, so a disputed temperature is a disputed RH. "
+               "Raw and reported are Celsius; the room sensor is Fahrenheit.",
+          overrides=[
+              {"matcher": {"id": "byName", "options": "Sensor raw"},
+               "properties": [{"id": "unit", "value": "celsius"},
+                              {"id": "color", "value": {"mode": "fixed", "fixedColor": "orange"}}]},
+              {"matcher": {"id": "byName", "options": "Reported"},
+               "properties": [{"id": "unit", "value": "celsius"},
+                              {"id": "color", "value": {"mode": "fixed", "fixedColor": "red"}}]},
+              {"matcher": {"id": "byName", "options": "AirGradient room"},
+               "properties": [{"id": "unit", "value": "fahrenheit"},
+                              {"id": "custom.axisPlacement", "value": "right"},
+                              {"id": "color", "value": {"mode": "fixed", "fixedColor": "green"}}]},
+          ]),
+
+    panel(13, "Demand before and after trimming",
+          [("sp_alg_raw_demand", "Raw"), ("sp_alg_cool_demand", "Cool"),
+           ("sp_alg_dehum_demand", "Dehum")],
+          {"h": 8, "w": 24, "x": 0, "y": 61},
+          desc="What the control algorithm computed before trimming, against the "
+               "trimmed demands it acted on. A persistent gap between raw and "
+               "cool demand is the equipment declining to deliver what the "
+               "algorithm asked for -- which is a different problem from the "
+               "algorithm not asking.",
+          overrides=[color("Raw", "purple"), color("Cool", "blue"),
+                     color("Dehum", "green")]),
+]
+
+AIR += [
+panel(8, "Outdoor air quality index", [("sp_aq_outdoor_aqi", "AQI"),
+                                           ("sp_aq_outdoor_aqi_max", "AQI peak")],
+          {"h": 8, "w": 24, "x": 0, "y": 42},
+          desc="The composite the thermostat computes from its outdoor feed, "
+               "which the separate particle and ozone panels break apart. Useful "
+               "as the one-line answer to whether outside air is worth letting "
+               "in today; use the other two panels to find out which pollutant "
+               "is driving it.",
+          overrides=[color("AQI", "orange"), color_faint("AQI peak", "semi-dark-orange")]),
+]
+
+
 if __name__ == "__main__":
     import io
 
