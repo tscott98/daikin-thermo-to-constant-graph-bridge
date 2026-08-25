@@ -367,9 +367,59 @@ DEHUM = [
                "the pattern that under-dehumidifies.",
           overrides=[color("Compressor RPS", "green"), color("Frequency %", "purple")]),
 
+    panel(8, "Duct temperatures and split",
+          [("duct_return_temp_f", "Return"), ("duct_supply_temp_f", "Supply"),
+           ("return_dewpoint_f", "Return dew point"), ("duct_split_f", "Split")],
+          {"h": 8, "w": 12, "x": 0, "y": 34}, unit="fahrenheit",
+          desc="Return against supply, with the return dew point for reference. "
+               "A 15-20F split is normal for cooling. The supply probe is at a "
+               "register rather than the plenum, so it reads warmer than the air "
+               "leaving the coil.",
+          overrides=[color("Return", "orange"), color("Supply", "blue"),
+                     color("Return dew point", "purple"), color("Split", "green")]),
+
+    panel(9, "Condensing margin",
+          [("condensing_margin_f", "Supply above dew point")],
+          {"h": 8, "w": 12, "x": 12, "y": 34}, unit="fahrenheit",
+          desc="Supply dry bulb minus return dew point. Negative means "
+               "condensation is visible at the probe. A small positive value is "
+               "expected while the coil is still condensing, because duct gain "
+               "warms the air before it reaches the register - so read the trend, "
+               "not the sign. This is the honest version of the SHR question: "
+               "with no humidity sensor at the supply, shr_est bottoms out at "
+               "1.0 whenever the probe cannot see condensation.",
+          overrides=[
+              {"matcher": {"id": "byName", "options": "Supply above dew point"},
+               "properties": [
+                   {"id": "color", "value": {"mode": "fixed", "fixedColor": "purple"}},
+                   {"id": "custom.fillOpacity", "value": 15},
+                   {"id": "thresholds", "value": {"mode": "absolute", "steps": [
+                       {"color": "green", "value": None},
+                       {"color": "orange", "value": 0},
+                   ]}},
+                   {"id": "custom.thresholdsStyle", "value": {"mode": "dashed"}},
+               ]},
+          ]),
+
+    panel(10, "Measured cooling capacity and efficiency",
+          [("sensible_btuh", "Sensible BTU/hr"), ("eer_est", "EER (est)")],
+          {"h": 8, "w": 24, "x": 0, "y": 42},
+          desc="Sensible capacity is exact: 1.08 x CFM x split. Compare against "
+               "the 42,000 BTU/hr nameplate, remembering the unit spends most of "
+               "its time at part load, and that duct gain at the register biases "
+               "this low. EER counts sensible plus the latent floor, so it "
+               "understates true efficiency whenever the probe cannot see "
+               "condensation.",
+          overrides=[
+              color("Sensible BTU/hr", "yellow"),
+              {"matcher": {"id": "byName", "options": "EER (est)"},
+               "properties": [{"id": "custom.axisPlacement", "value": "right"},
+                              {"id": "color", "value": {"mode": "fixed", "fixedColor": "green"}}]},
+          ]),
+
     panel(7, "Derived superheat - the margin before trimming airflow",
           [("superheat_f", "Superheat")],
-          {"h": 8, "w": 24, "x": 0, "y": 34}, unit="fahrenheit",
+          {"h": 8, "w": 24, "x": 0, "y": 50}, unit="fahrenheit",
           desc="Computed from suction pressure and coil suction temperature "
                "against an R-410A curve, not read from the equipment's own "
                "superheat field, whose scale could not be established. Normal is "

@@ -226,6 +226,24 @@ quiet house look identical on every other chart.
 Conversions are applied per row inside `AVG()`, not to bucket averages — averaging relative
 humidity and converting afterwards gives a different and wrong number.
 
+**Duct sensors and measured capacity.** External return and supply probes (SmartThings,
+published into ConstantGraph and read back via its read API) give
+`duct_return_temp_f`, `duct_return_rh` and `duct_supply_temp_f`, from which
+`/api/series` derives `duct_split_f`, `return_dewpoint_f`, `condensing_margin_f`,
+`sensible_btuh`, `latent_btuh_est`, `shr_est` and `eer_est`.
+
+Sensible capacity is exact — `1.08 × CFM × split` needs only the two temperatures. Latent is
+**not**, and the distinction matters: there is no humidity sensor at the supply, so supply
+humidity ratio is assumed at 95% RH and the estimate is gated on supply dry bulb sitting below
+the return dew point. With the probe at a register rather than the plenum, that gate is too
+strict — air leaves the coil around 45–48 °F and condenses, then warms through the duct run. So
+`shr_est` of 1.0 means "no condensation visible at the probe", not "no dehumidification".
+`condensing_margin_f` is the honest form of that signal, and `eer_est` is a floor.
+
+Reading requires a ConstantGraph **read** key (`CG_READ_API_KEY`), which is a different
+credential from the write key, and the channel IDs and location node are configured in
+`wrangler.toml`. Set any channel to `0` to skip it.
+
 **Marking configuration changes.** `scripts/mark-change.sh "what changed"` posts a Grafana
 annotation that every dashboard renders as an orange marker. Changing one setting at a time only
 yields attributable results if the change is visible on the same timeline as the effect.
