@@ -37,8 +37,23 @@ if [ "${1:-}" = "--verify" ]; then
   exit 0
 fi
 
+# The dashboards are committed in Grafana's export format, which refers to the
+# datasource as ${DS_INFINITY} so the JSON stays portable between Grafana
+# instances. The API does not resolve that -- only the UI import flow does --
+# so look up this instance's Infinity datasource and let grafana_fmt.py
+# substitute it. Set GRAFANA_DS_UID in .grafana-env to override.
+if [ -z "${GRAFANA_DS_UID:-}" ]; then
+  api GET '/api/datasources' > /tmp/gf_ds.json
+  GRAFANA_DS_UID="$(python3 scripts/grafana_fmt.py infinity-uid /tmp/gf_ds.json)"
+  export GRAFANA_DS_UID
+  echo "infinity datasource: $GRAFANA_DS_UID"
+fi
+
 FILES=("$@")
-[ ${#FILES[@]} -eq 0 ] && FILES=(grafana/dashboard-energy.json grafana/dashboard-health.json)
+[ ${#FILES[@]} -eq 0 ] && FILES=(
+  grafana/dashboard-energy.json grafana/dashboard-health.json
+  grafana/dashboard-dehum.json grafana/dashboard-air.json
+)
 
 for f in "${FILES[@]}"; do
   [ -f "$f" ] || { echo "skip (missing): $f" >&2; continue; }
