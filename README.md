@@ -195,6 +195,7 @@ sensor the data came from.
 | [`dashboard.json`](grafana/dashboard.json) | Is the house comfortable and the system behaving? | Ambient, several times a day |
 | [`dashboard-energy.json`](grafana/dashboard-energy.json) | What is this costing, and is it performing? | Monthly, or when a bill surprises |
 | [`dashboard-health.json`](grafana/dashboard-health.json) | Is anything wrong, or slowly getting worse? | Rarely by choice — usually because an alert fired |
+| [`dashboard-dehum.json`](grafana/dashboard-dehum.json) | Why is indoor humidity high, and is the fix working? | Temporary — retire once the question is settled |
 
 Energy & Efficiency defaults to 30 days, because a single day says nothing about
 cost. Its two scatter panels pin the interval to hourly rather than following the
@@ -207,6 +208,27 @@ otherwise — because that is the question the dashboard exists to answer. It al
 carries a samples-per-bucket panel, which is the only thing that distinguishes
 "the system is idle" from "collection broke"; without it a dead poller and a
 quiet house look identical on every other chart.
+
+### Derived columns
+
+`/api/series` computes several values the equipment does not report directly:
+
+- **`indoor_w_gr` / `outdoor_w_gr`** — humidity ratio in grains per pound of dry air, and
+  **`indoor_dewpoint_f` / `outdoor_dewpoint_f`**. Relative humidity is temperature-dependent:
+  the same moisture reads 60% at 70 °F and about 50% at 75 °F, so an RH chart conflates "the air
+  got wetter" with "the setpoint moved". Humidity ratio does not, which is what makes indoor and
+  outdoor directly comparable.
+- **`superheat_f`** — derived from suction pressure and coil suction temperature against an
+  R-410A curve, *not* read from the equipment's own superheat field, whose scale could not be
+  established. Assumes the pressure sensor reports psig; the derived values landing at a textbook
+  10–12 °F is the evidence for that, not a guarantee.
+
+Conversions are applied per row inside `AVG()`, not to bucket averages — averaging relative
+humidity and converting afterwards gives a different and wrong number.
+
+**Marking configuration changes.** `scripts/mark-change.sh "what changed"` posts a Grafana
+annotation that every dashboard renders as an orange marker. Changing one setting at a time only
+yields attributable results if the change is visible on the same timeline as the effect.
 
 ### Alerting
 

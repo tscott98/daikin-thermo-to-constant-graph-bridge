@@ -17,7 +17,7 @@
       "version": "1.0.0"
     }
   ],
-  "uid": "daikin-energy",
+  "uid": "daikin-dehum",
   "annotations": {
     "list": [
       {
@@ -53,20 +53,20 @@
       }
     ]
   },
-  "title": "Daikin \u2014 Energy & Efficiency",
-  "description": "What the system costs to run and whether it is performing as it should. Defaults to 30 days; a single day says nothing about cost.",
+  "title": "Daikin \u2014 Dehumidification investigation",
+  "description": "Answers the questions in reference/hvac-dehumidification-brief.md. Temporary by design: retire or fold into Home once the question is settled.",
   "schemaVersion": 39,
   "editable": true,
   "graphTooltip": 1,
-  "refresh": "15m",
+  "refresh": "5m",
   "time": {
-    "from": "now-30d",
+    "from": "now-3d",
     "to": "now"
   },
   "timezone": "browser",
   "tags": [
     "daikin",
-    "energy"
+    "dehumidification"
   ],
   "templating": {
     "list": [
@@ -88,16 +88,16 @@
   "panels": [
     {
       "id": 1,
-      "title": "Power draw",
+      "title": "Indoor RH against the 45-55% target",
       "type": "timeseries",
       "datasource": {
         "type": "yesoreyeram-infinity-datasource",
         "uid": "${DS_INFINITY}"
       },
-      "description": "Outdoor unit power. The indoor figure is omitted: its scale is unverified, so charting it next to a real watt value would imply a precision we do not have.",
+      "description": "The goal metric. Green band is target; red above, amber below. Read it alongside the humidity ratio panel: RH alone conflates 'the air got wetter' with 'the setpoint moved', because the same moisture reads 60% at 70F and about 50% at 75F.",
       "gridPos": {
-        "h": 8,
-        "w": 16,
+        "h": 9,
+        "w": 24,
         "x": 0,
         "y": 0
       },
@@ -124,8 +124,8 @@
               "type": "timestamp"
             },
             {
-              "selector": "sp_outdoor_power",
-              "text": "Outdoor unit",
+              "selector": "hum_indoor",
+              "text": "Indoor RH",
               "type": "number"
             }
           ],
@@ -134,24 +134,66 @@
       ],
       "fieldConfig": {
         "defaults": {
-          "unit": "watt",
+          "unit": "percent",
           "custom": {
-            "lineWidth": 1,
-            "fillOpacity": 20
+            "lineWidth": 2,
+            "fillOpacity": 6
           }
         },
         "overrides": [
           {
             "matcher": {
               "id": "byName",
-              "options": "Outdoor unit"
+              "options": "Indoor RH"
             },
             "properties": [
+              {
+                "id": "custom.fillOpacity",
+                "value": 0
+              },
+              {
+                "id": "custom.lineWidth",
+                "value": 3
+              },
               {
                 "id": "color",
                 "value": {
                   "mode": "fixed",
-                  "fixedColor": "yellow"
+                  "fixedColor": "blue"
+                }
+              },
+              {
+                "id": "max",
+                "value": 70
+              },
+              {
+                "id": "min",
+                "value": 35
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "orange",
+                      "value": null
+                    },
+                    {
+                      "color": "green",
+                      "value": 45
+                    },
+                    {
+                      "color": "red",
+                      "value": 55
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "custom.thresholdsStyle",
+                "value": {
+                  "mode": "area"
                 }
               }
             ]
@@ -172,18 +214,18 @@
     },
     {
       "id": 2,
-      "title": "Compressor hours per day",
+      "title": "Humidity ratio - indoor vs outdoor",
       "type": "timeseries",
       "datasource": {
         "type": "yesoreyeram-infinity-datasource",
         "uid": "${DS_INFINITY}"
       },
-      "description": "From the equipment's own cumulative compressor-hour counter, differenced between buckets. Exact at daily resolution. Set the panel interval to 1d; at finer intervals this reads mostly zero because the counter only ticks once per accumulated hour.",
+      "description": "Absolute moisture, grains per pound of dry air, independent of temperature. If indoor tracks outdoor with a lag, moisture is getting in through the envelope and no thermostat setting fixes it. If it tracks time of day instead, the load is internal. Needs several diurnal cycles to tell those apart.",
       "gridPos": {
-        "h": 8,
-        "w": 8,
-        "x": 16,
-        "y": 0
+        "h": 9,
+        "w": 12,
+        "x": 0,
+        "y": 9
       },
       "targets": [
         {
@@ -208,8 +250,13 @@
               "type": "timestamp"
             },
             {
-              "selector": "compressor_runtime_delta",
-              "text": "Hours",
+              "selector": "indoor_w_gr",
+              "text": "Indoor",
+              "type": "number"
+            },
+            {
+              "selector": "outdoor_w_gr",
+              "text": "Outdoor",
               "type": "number"
             }
           ],
@@ -218,7 +265,7 @@
       ],
       "fieldConfig": {
         "defaults": {
-          "unit": "h",
+          "unit": "",
           "custom": {
             "lineWidth": 2,
             "fillOpacity": 6
@@ -228,13 +275,24 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "Hours"
+              "options": "Indoor"
             },
             "properties": [
               {
-                "id": "custom.drawStyle",
-                "value": "bars"
-              },
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "blue"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Outdoor"
+            },
+            "properties": [
               {
                 "id": "color",
                 "value": {
@@ -260,212 +318,18 @@
     },
     {
       "id": 3,
-      "title": "Power vs outdoor temperature",
-      "type": "xychart",
-      "datasource": {
-        "type": "yesoreyeram-infinity-datasource",
-        "uid": "${DS_INFINITY}"
-      },
-      "description": "The efficiency curve. Hourly buckets. Rising power at a given outdoor temperature, compared across seasons, is how degradation shows up before anything feels wrong.",
-      "gridPos": {
-        "h": 9,
-        "w": 12,
-        "x": 0,
-        "y": 8
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "datasource": {
-            "type": "yesoreyeram-infinity-datasource",
-            "uid": "${DS_INFINITY}"
-          },
-          "type": "json",
-          "source": "url",
-          "parser": "backend",
-          "format": "table",
-          "url": "/api/series?from=$__from&to=$__to&interval=3600&device=$device",
-          "url_options": {
-            "method": "GET"
-          },
-          "root_selector": "",
-          "columns": [
-            {
-              "selector": "outdoor_f",
-              "text": "Outdoor",
-              "type": "number"
-            },
-            {
-              "selector": "sp_outdoor_power",
-              "text": "Power",
-              "type": "number"
-            }
-          ],
-          "filters": []
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "",
-          "custom": {
-            "show": "points",
-            "pointSize": {
-              "fixed": 5
-            }
-          }
-        },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Outdoor"
-            },
-            "properties": [
-              {
-                "id": "unit",
-                "value": "fahrenheit"
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Power"
-            },
-            "properties": [
-              {
-                "id": "unit",
-                "value": "watt"
-              }
-            ]
-          }
-        ]
-      },
-      "options": {
-        "mapping": "auto",
-        "series": [
-          {
-            "showPoints": "always",
-            "pointSize": {
-              "fixed": 5
-            }
-          }
-        ],
-        "legend": {
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": false
-        },
-        "tooltip": {
-          "mode": "single"
-        }
-      }
-    },
-    {
-      "id": 4,
-      "title": "Compressor modulation vs outdoor temperature",
-      "type": "xychart",
-      "datasource": {
-        "type": "yesoreyeram-infinity-datasource",
-        "uid": "${DS_INFINITY}"
-      },
-      "description": "Whether the inverter actually modulates or just cycles on and off. A spread of speeds across temperatures is the behaviour a variable-speed system is sold on; clustering at one speed is not.",
-      "gridPos": {
-        "h": 9,
-        "w": 12,
-        "x": 12,
-        "y": 8
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "datasource": {
-            "type": "yesoreyeram-infinity-datasource",
-            "uid": "${DS_INFINITY}"
-          },
-          "type": "json",
-          "source": "url",
-          "parser": "backend",
-          "format": "table",
-          "url": "/api/series?from=$__from&to=$__to&interval=3600&device=$device",
-          "url_options": {
-            "method": "GET"
-          },
-          "root_selector": "",
-          "columns": [
-            {
-              "selector": "outdoor_f",
-              "text": "Outdoor",
-              "type": "number"
-            },
-            {
-              "selector": "sp_compressor_rps",
-              "text": "Compressor RPS",
-              "type": "number"
-            }
-          ],
-          "filters": []
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "",
-          "custom": {
-            "show": "points",
-            "pointSize": {
-              "fixed": 5
-            }
-          }
-        },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Outdoor"
-            },
-            "properties": [
-              {
-                "id": "unit",
-                "value": "fahrenheit"
-              }
-            ]
-          }
-        ]
-      },
-      "options": {
-        "mapping": "auto",
-        "series": [
-          {
-            "showPoints": "always",
-            "pointSize": {
-              "fixed": 5
-            }
-          }
-        ],
-        "legend": {
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": false
-        },
-        "tooltip": {
-          "mode": "single"
-        }
-      }
-    },
-    {
-      "id": 6,
-      "title": "Energy and cost per day",
+      "title": "Dew point - indoor vs outdoor",
       "type": "timeseries",
       "datasource": {
         "type": "yesoreyeram-infinity-datasource",
         "uid": "${DS_INFINITY}"
       },
-      "description": "Set the panel interval to 1d. Energy is integrated from the sample count rather than the bucket width, so a gap in collection contributes nothing instead of being billed at the average rate. Outdoor unit only -- the blower is not included, because its power reading has an unverified scale.",
+      "description": "Indoor dew point below outdoor means the coil is removing moisture. The size of the gap is how much.",
       "gridPos": {
-        "h": 8,
-        "w": 16,
-        "x": 0,
-        "y": 25
+        "h": 9,
+        "w": 12,
+        "x": 12,
+        "y": 9
       },
       "targets": [
         {
@@ -490,13 +354,13 @@
               "type": "timestamp"
             },
             {
-              "selector": "energy_kwh",
-              "text": "kWh",
+              "selector": "indoor_dewpoint_f",
+              "text": "Indoor",
               "type": "number"
             },
             {
-              "selector": "cost",
-              "text": "Cost",
+              "selector": "outdoor_dewpoint_f",
+              "text": "Outdoor",
               "type": "number"
             }
           ],
@@ -505,7 +369,7 @@
       ],
       "fieldConfig": {
         "defaults": {
-          "unit": "kwatth",
+          "unit": "fahrenheit",
           "custom": {
             "lineWidth": 2,
             "fillOpacity": 6
@@ -515,14 +379,14 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "kWh"
+              "options": "Indoor"
             },
             "properties": [
               {
                 "id": "color",
                 "value": {
                   "mode": "fixed",
-                  "fixedColor": "yellow"
+                  "fixedColor": "blue"
                 }
               }
             ]
@@ -530,39 +394,15 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "Cost"
+              "options": "Outdoor"
             },
             "properties": [
-              {
-                "id": "unit",
-                "value": "currencyUSD"
-              },
               {
                 "id": "color",
                 "value": {
                   "mode": "fixed",
-                  "fixedColor": "green"
+                  "fixedColor": "orange"
                 }
-              },
-              {
-                "id": "custom.axisPlacement",
-                "value": "right"
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byRegexp",
-              "options": ".*"
-            },
-            "properties": [
-              {
-                "id": "custom.drawStyle",
-                "value": "bars"
-              },
-              {
-                "id": "custom.fillOpacity",
-                "value": 60
               }
             ]
           }
@@ -581,19 +421,19 @@
       }
     },
     {
-      "id": 7,
-      "title": "Cost for selected range",
-      "type": "stat",
+      "id": 4,
+      "title": "Is dehumidification actually being requested?",
+      "type": "timeseries",
       "datasource": {
         "type": "yesoreyeram-infinity-datasource",
         "uid": "${DS_INFINITY}"
       },
-      "description": "Sum of per-bucket cost across the dashboard time range, at the rate configured in RATE_PER_KWH. Outdoor unit only.",
+      "description": "If dehum demand sits at zero while cool demand is active, the humidity target is misconfigured and no equipment-side airflow tuning can help. Cool demand is plotted alongside so a zero reading can be told apart from the system simply not running.",
       "gridPos": {
         "h": 8,
-        "w": 8,
-        "x": 16,
-        "y": 25
+        "w": 24,
+        "x": 0,
+        "y": 18
       },
       "targets": [
         {
@@ -618,8 +458,23 @@
               "type": "timestamp"
             },
             {
-              "selector": "cost",
-              "text": "Cost",
+              "selector": "sp_dehum_demand_pct",
+              "text": "Outdoor dehum demand",
+              "type": "number"
+            },
+            {
+              "selector": "sp_alg_dehum_demand",
+              "text": "Algorithm dehum",
+              "type": "number"
+            },
+            {
+              "selector": "sp_alg_overcool_demand",
+              "text": "Algorithm overcool",
+              "type": "number"
+            },
+            {
+              "selector": "sp_alg_cool_demand",
+              "text": "Algorithm cool",
               "type": "number"
             }
           ],
@@ -628,43 +483,205 @@
       ],
       "fieldConfig": {
         "defaults": {
-          "unit": "currencyUSD",
+          "unit": "percent",
           "custom": {
             "lineWidth": 2,
             "fillOpacity": 6
           }
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Outdoor dehum demand"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "blue"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Algorithm dehum"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "light-blue"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Algorithm overcool"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "purple"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Algorithm cool"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "text"
+                }
+              }
+            ]
+          }
+        ]
       },
       "options": {
-        "reduceOptions": {
-          "calcs": [
-            "sum"
-          ],
-          "fields": "",
-          "values": false
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
         },
-        "orientation": "auto",
-        "textMode": "auto",
-        "colorMode": "value",
-        "graphMode": "none",
-        "justifyMode": "auto"
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
       }
     },
     {
       "id": 5,
-      "title": "Compressor speed and demand",
+      "title": "Airflow - commanded vs actual",
       "type": "timeseries",
       "datasource": {
         "type": "yesoreyeram-infinity-datasource",
         "uid": "${DS_INFINITY}"
       },
-      "description": "Actual against commanded speed. Sustained divergence means the unit cannot reach the speed it is being asked for.",
+      "description": "Actual oscillating around commanded is normal control lag. Actual sitting persistently below commanded points at static pressure - a loaded filter or duct restriction. Sustained divergence is the signal, not any single sample.",
       "gridPos": {
         "h": 8,
-        "w": 24,
+        "w": 12,
         "x": 0,
-        "y": 17
+        "y": 26
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "${DS_INFINITY}"
+          },
+          "type": "json",
+          "source": "url",
+          "parser": "backend",
+          "format": "timeseries",
+          "url": "/api/series?from=$__from&to=$__to&interval=$__interval_ms&device=$device",
+          "url_options": {
+            "method": "GET"
+          },
+          "root_selector": "",
+          "columns": [
+            {
+              "selector": "time",
+              "text": "time",
+              "type": "timestamp"
+            },
+            {
+              "selector": "sp_requested_airflow",
+              "text": "Commanded CFM",
+              "type": "number"
+            },
+            {
+              "selector": "sp_indoor_airflow",
+              "text": "Actual CFM",
+              "type": "number"
+            }
+          ],
+          "filters": []
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "",
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 6
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Commanded CFM"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "yellow"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Actual CFM"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "green"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      }
+    },
+    {
+      "id": 6,
+      "title": "Compressor speed - long low-speed runs are what dehumidify",
+      "type": "timeseries",
+      "datasource": {
+        "type": "yesoreyeram-infinity-datasource",
+        "uid": "${DS_INFINITY}"
+      },
+      "description": "Moisture removal comes from sustained low-speed operation, not from short bursts at high speed: the coil needs time to get wet. Frequent excursions to high RPS with little time at low speed is the pattern that under-dehumidifies.",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 26
       },
       "targets": [
         {
@@ -690,12 +707,7 @@
             },
             {
               "selector": "sp_compressor_rps",
-              "text": "Actual RPS",
-              "type": "number"
-            },
-            {
-              "selector": "sp_target_compressor_rps",
-              "text": "Target RPS",
+              "text": "Compressor RPS",
               "type": "number"
             },
             {
@@ -719,7 +731,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "Actual RPS"
+              "options": "Compressor RPS"
             },
             "properties": [
               {
@@ -727,21 +739,6 @@
                 "value": {
                   "mode": "fixed",
                   "fixedColor": "green"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Target RPS"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "mode": "fixed",
-                  "fixedColor": "blue"
                 }
               }
             ]
@@ -757,6 +754,116 @@
                 "value": {
                   "mode": "fixed",
                   "fixedColor": "purple"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      }
+    },
+    {
+      "id": 7,
+      "title": "Derived superheat - the margin before trimming airflow",
+      "type": "timeseries",
+      "datasource": {
+        "type": "yesoreyeram-infinity-datasource",
+        "uid": "${DS_INFINITY}"
+      },
+      "description": "Computed from suction pressure and coil suction temperature against an R-410A curve, not read from the equipment's own superheat field, whose scale could not be established. Normal is 8-15F. Trimming airflow lowers this; watch it before and after any trim, because too little superheat floods the compressor.",
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 34
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "${DS_INFINITY}"
+          },
+          "type": "json",
+          "source": "url",
+          "parser": "backend",
+          "format": "timeseries",
+          "url": "/api/series?from=$__from&to=$__to&interval=$__interval_ms&device=$device",
+          "url_options": {
+            "method": "GET"
+          },
+          "root_selector": "",
+          "columns": [
+            {
+              "selector": "time",
+              "text": "time",
+              "type": "timestamp"
+            },
+            {
+              "selector": "superheat_f",
+              "text": "Superheat",
+              "type": "number"
+            }
+          ],
+          "filters": []
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "fahrenheit",
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 6
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Superheat"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "orange"
+                }
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 15
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "red",
+                      "value": null
+                    },
+                    {
+                      "color": "green",
+                      "value": 8
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "custom.thresholdsStyle",
+                "value": {
+                  "mode": "dashed"
                 }
               }
             ]

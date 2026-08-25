@@ -138,7 +138,16 @@ ENERGY = [
 
     panel(3, "Power vs outdoor temperature",
           [("outdoor_f", "Outdoor"), ("sp_outdoor_power", "Power")],
-          {"h": 9, "w": 12, "x": 0, "y": 8}, unit="watt", ptype="xychart", fmt="table",
+          # No panel-level unit: on an XY chart the default applies to both
+          # axes, which would label outdoor temperature in watts. Units go on
+          # the fields instead.
+          {"h": 9, "w": 12, "x": 0, "y": 8}, unit="", ptype="xychart", fmt="table",
+          overrides=[
+              {"matcher": {"id": "byName", "options": "Outdoor"},
+               "properties": [{"id": "unit", "value": "fahrenheit"}]},
+              {"matcher": {"id": "byName", "options": "Power"},
+               "properties": [{"id": "unit", "value": "watt"}]},
+          ],
           url="/api/series?from=$__from&to=$__to&interval=3600&device=$device",
           desc="The efficiency curve. Hourly buckets. Rising power at a given "
                "outdoor temperature, compared across seasons, is how degradation "
@@ -152,6 +161,10 @@ ENERGY = [
     panel(4, "Compressor modulation vs outdoor temperature",
           [("outdoor_f", "Outdoor"), ("sp_compressor_rps", "Compressor RPS")],
           {"h": 9, "w": 12, "x": 12, "y": 8}, ptype="xychart", fmt="table",
+          overrides=[
+              {"matcher": {"id": "byName", "options": "Outdoor"},
+               "properties": [{"id": "unit", "value": "fahrenheit"}]},
+          ],
           url="/api/series?from=$__from&to=$__to&interval=3600&device=$device",
           desc="Whether the inverter actually modulates or just cycles on and "
                "off. A spread of speeds across temperatures is the behaviour a "
@@ -271,6 +284,112 @@ HEALTH += [
 ]
 
 
+
+
+
+# ---------------------------------------------------------------- Dashboard D
+# Dehumidification investigation. Unlike the other three this is temporary:
+# it exists to answer the questions in reference/hvac-dehumidification-brief.md
+# and should be retired or folded into Home once the question is settled.
+
+RH_BAND = [
+    {"matcher": {"id": "byName", "options": "Indoor RH"},
+     "properties": [
+         {"id": "custom.fillOpacity", "value": 0},
+         {"id": "custom.lineWidth", "value": 3},
+         {"id": "color", "value": {"mode": "fixed", "fixedColor": "blue"}},
+         {"id": "max", "value": 70}, {"id": "min", "value": 35},
+         {"id": "thresholds", "value": {"mode": "absolute", "steps": [
+             {"color": "orange", "value": None},   # below 45: too dry
+             {"color": "green", "value": 45},      # target band
+             {"color": "red", "value": 55},        # above target
+         ]}},
+         {"id": "custom.thresholdsStyle", "value": {"mode": "area"}},
+     ]},
+]
+
+DEHUM = [
+    panel(1, "Indoor RH against the 45-55% target", [("hum_indoor", "Indoor RH")],
+          {"h": 9, "w": 24, "x": 0, "y": 0}, unit="percent",
+          desc="The goal metric. Green band is target; red above, amber below. "
+               "Read it alongside the humidity ratio panel: RH alone conflates "
+               "'the air got wetter' with 'the setpoint moved', because the same "
+               "moisture reads 60% at 70F and about 50% at 75F.",
+          overrides=RH_BAND),
+
+    panel(2, "Humidity ratio - indoor vs outdoor",
+          [("indoor_w_gr", "Indoor"), ("outdoor_w_gr", "Outdoor")],
+          {"h": 9, "w": 12, "x": 0, "y": 9},
+          desc="Absolute moisture, grains per pound of dry air, independent of "
+               "temperature. If indoor tracks outdoor with a lag, moisture is "
+               "getting in through the envelope and no thermostat setting fixes "
+               "it. If it tracks time of day instead, the load is internal. "
+               "Needs several diurnal cycles to tell those apart.",
+          overrides=[color("Indoor", "blue"), color("Outdoor", "orange")]),
+
+    panel(3, "Dew point - indoor vs outdoor",
+          [("indoor_dewpoint_f", "Indoor"), ("outdoor_dewpoint_f", "Outdoor")],
+          {"h": 9, "w": 12, "x": 12, "y": 9}, unit="fahrenheit",
+          desc="Indoor dew point below outdoor means the coil is removing "
+               "moisture. The size of the gap is how much.",
+          overrides=[color("Indoor", "blue"), color("Outdoor", "orange")]),
+
+    panel(4, "Is dehumidification actually being requested?",
+          [("sp_dehum_demand_pct", "Outdoor dehum demand"),
+           ("sp_alg_dehum_demand", "Algorithm dehum"),
+           ("sp_alg_overcool_demand", "Algorithm overcool"),
+           ("sp_alg_cool_demand", "Algorithm cool")],
+          {"h": 8, "w": 24, "x": 0, "y": 18}, unit="percent",
+          desc="If dehum demand sits at zero while cool demand is active, the "
+               "humidity target is misconfigured and no equipment-side airflow "
+               "tuning can help. Cool demand is plotted alongside so a zero "
+               "reading can be told apart from the system simply not running.",
+          overrides=[color("Outdoor dehum demand", "blue"),
+                     color("Algorithm dehum", "light-blue"),
+                     color("Algorithm overcool", "purple"),
+                     color("Algorithm cool", "text")]),
+
+    panel(5, "Airflow - commanded vs actual",
+          [("sp_requested_airflow", "Commanded CFM"), ("sp_indoor_airflow", "Actual CFM")],
+          {"h": 8, "w": 12, "x": 0, "y": 26},
+          desc="Actual oscillating around commanded is normal control lag. "
+               "Actual sitting persistently below commanded points at static "
+               "pressure - a loaded filter or duct restriction. Sustained "
+               "divergence is the signal, not any single sample.",
+          overrides=[color("Commanded CFM", "yellow"), color("Actual CFM", "green")]),
+
+    panel(6, "Compressor speed - long low-speed runs are what dehumidify",
+          [("sp_compressor_rps", "Compressor RPS"), ("sp_frequency_pct", "Frequency %")],
+          {"h": 8, "w": 12, "x": 12, "y": 26},
+          desc="Moisture removal comes from sustained low-speed operation, not "
+               "from short bursts at high speed: the coil needs time to get wet. "
+               "Frequent excursions to high RPS with little time at low speed is "
+               "the pattern that under-dehumidifies.",
+          overrides=[color("Compressor RPS", "green"), color("Frequency %", "purple")]),
+
+    panel(7, "Derived superheat - the margin before trimming airflow",
+          [("superheat_f", "Superheat")],
+          {"h": 8, "w": 24, "x": 0, "y": 34}, unit="fahrenheit",
+          desc="Computed from suction pressure and coil suction temperature "
+               "against an R-410A curve, not read from the equipment's own "
+               "superheat field, whose scale could not be established. Normal is "
+               "8-15F. Trimming airflow lowers this; watch it before and after "
+               "any trim, because too little superheat floods the compressor.",
+          overrides=[
+              {"matcher": {"id": "byName", "options": "Superheat"},
+               "properties": [
+                   {"id": "color", "value": {"mode": "fixed", "fixedColor": "orange"}},
+                   {"id": "custom.fillOpacity", "value": 15},
+                   {"id": "thresholds", "value": {"mode": "absolute", "steps": [
+                       {"color": "red", "value": None},
+                       {"color": "green", "value": 8},
+                   ]}},
+                   {"id": "custom.thresholdsStyle", "value": {"mode": "dashed"}},
+               ]},
+          ]),
+]
+
+
 if __name__ == "__main__":
     import io
 
@@ -282,6 +401,13 @@ if __name__ == "__main__":
             "Defaults to 30 days; a single day says nothing about cost.",
             ENERGY, refresh="15m", time_from="now-30d",
             tags=["daikin", "energy"]),
+        "grafana/dashboard-dehum.json": dashboard(
+            "daikin-dehum",
+            "Daikin — Dehumidification investigation",
+            "Answers the questions in reference/hvac-dehumidification-brief.md. "
+            "Temporary by design: retire or fold into Home once the question is settled.",
+            DEHUM, refresh="5m", time_from="now-3d",
+            tags=["daikin", "dehumidification"]),
         "grafana/dashboard-health.json": dashboard(
             "daikin-health",
             "Daikin — System Health & Diagnostics",

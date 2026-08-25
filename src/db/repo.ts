@@ -448,6 +448,74 @@ const SKYPORT_UNCALIBRATED = new Set<string>([
   'sp_indoor_power',
 ]);
 
+/**
+ * Psychrometrics and derived superheat.
+ *
+ * Relative humidity is the wrong metric for a dehumidification question: the
+ * same absolute moisture reads 60% at 70F and roughly 50% at 75F, so an RH
+ * chart conflates "the air got wetter" with "the thermostat setpoint moved".
+ * Humidity ratio (grains of water per pound of dry air) and dew point are
+ * temperature-independent, which is what makes indoor and outdoor comparable
+ * and makes an infiltration signal legible.
+ *
+ * Magnus formula for saturation vapour pressure, standard sea-level pressure.
+ * The expressions sit inside AVG() so each row is converted before averaging;
+ * averaging RH first and converting after would be a different, wrong number.
+ */
+function humidityRatioSql(tempC: string, rh: string): string {
+  const psat = `610.94 * exp(17.625 * ${tempC} / (${tempC} + 243.04))`;
+  const pv = `(${rh} / 100.0) * (${psat})`;
+  return `0.62198 * (${pv}) / (101325.0 - (${pv})) * 7000.0`;
+}
+
+function dewPointFSql(tempC: string, rh: string): string {
+  const g = `(ln(${rh} / 100.0) + 17.625 * ${tempC} / (243.04 + ${tempC}))`;
+  return `(243.04 * ${g} / (17.625 - ${g})) * 9.0 / 5.0 + 32.0`;
+}
+
+/**
+ * R-410A saturated-vapour temperature from suction pressure, piecewise linear.
+ *
+ * Superheat is what the brief needs before trimming airflow, and the stored
+ * sp_eev_superheat field could not be calibrated -- regressing it against this
+ * derivation over 178 samples gave R^2 of -8.6, so its scale is genuinely
+ * unknown. Deriving from pressure and coil suction temperature instead gives a
+ * number in real degrees F.
+ *
+ * Assumes the pressure sensor reports psig. If it is psia the whole curve
+ * shifts about 5F; the derived values landing at a textbook 10-12F is the
+ * evidence for psig, not a guarantee.
+ */
+function r410aSatFSql(psig: string): string {
+  const pts: Array<[number, number]> = [
+    [80, 20.8], [90, 25.9], [100, 30.8], [110, 35.5], [120, 40.0], [130, 44.1],
+    [140, 48.0], [150, 51.6], [160, 55.1], [170, 58.4], [180, 61.6], [190, 64.6],
+    [200, 67.5],
+  ];
+  const arms = pts.slice(0, -1).map(([p0, t0], i) => {
+    const [p1, t1] = pts[i + 1] as [number, number];
+    const slope = (t1 - t0) / (p1 - p0);
+    return `WHEN ${psig} < ${p1} THEN ${t0} + ${slope.toFixed(4)} * (${psig} - ${p0})`;
+  });
+  // Outside the tabulated range the curve is not trustworthy, so return NULL
+  // rather than extrapolating into a number someone might act on.
+  return `CASE WHEN ${psig} < ${pts[0]![0]} THEN NULL ${arms.join(' ')} ELSE NULL END`;
+}
+
+export function psychroClause(): string {
+  const inW = humidityRatioSql('temp_indoor_c', 'hum_indoor');
+  const outW = humidityRatioSql('temp_outdoor_c', 'hum_outdoor');
+  const sat = r410aSatFSql('sp_suction_pressure');
+  return [
+    `ROUND(AVG(${inW}), 1) AS indoor_w_gr`,
+    `ROUND(AVG(${outW}), 1) AS outdoor_w_gr`,
+    `ROUND(AVG(${dewPointFSql('temp_indoor_c', 'hum_indoor')}), 1) AS indoor_dewpoint_f`,
+    `ROUND(AVG(${dewPointFSql('temp_outdoor_c', 'hum_outdoor')}), 1) AS outdoor_dewpoint_f`,
+    `ROUND(AVG(CASE WHEN sp_compressor_rps > 5
+                    THEN sp_eev_suction_temp / 10.0 - (${sat}) END), 1) AS superheat_f`,
+  ].join(',\n            ');
+}
+
 export function skyportSelectClause(): string {
   return SKYPORT_COLUMNS.map((c) => {
     if (SKYPORT_MAX_COLUMNS.has(c)) return `MAX(${c}) AS ${c}`;
@@ -532,7 +600,8 @@ export async function getSeries(db: Db, o: SeriesOptions): Promise<Row[]> {
             ${skyportSelectClause()},
             MAX(sp_compressor_runtime) - LAG(MAX(sp_compressor_runtime))
               OVER (PARTITION BY device_id ORDER BY (ts / ?))  AS compressor_runtime_delta,
-            ${energyClause(sampleSec, rate)}
+            ${energyClause(sampleSec, rate)},
+            ${psychroClause()}
           FROM readings
           WHERE ${where.join(' AND ')}
           GROUP BY device_id, (ts / ?)
