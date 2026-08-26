@@ -277,6 +277,36 @@ Note this API authenticates with a token in the **query string** rather than a h
 token ends up in request URLs. The client never includes the URL in an error message for that
 reason; if you add logging here, keep that property.
 
+## 12. Optional: dashboards and alerts
+
+Both need a Grafana instance with the
+[Infinity](https://grafana.com/grafana/plugins/yesoreyeram-infinity-datasource/) data source
+pointed at your Worker's base URL, with `X-Api-Key: <READ_API_KEY>` as a configured header. Put
+the Worker's hostname in Infinity's allowed-hosts setting.
+
+Copy `.grafana-env.example` to `.grafana-env` and fill in `GRAFANA_URL` and a service account
+token with dashboard, folder and alert-rule permissions. Then:
+
+```bash
+./scripts/grafana-push.sh          # four dashboards, 44 panels
+python scripts/gen_alerts.py       # six alert rules
+python scripts/gen_alerts.py --check
+```
+
+The push script resolves the datasource UID from your instance. The dashboards are committed in
+Grafana's export format, which refers to the datasource as `${DS_INFINITY}` so the JSON stays
+portable; only the UI import flow resolves that, so pushing over the API without substituting it
+produces dashboards where every panel reports "Data source ds_infinity not found".
+
+Alert rules need a folder that already exists — create one in the UI and set
+`GRAFANA_ALERT_FOLDER`. A folder created through the API is not granted to the service account
+that created it, so it becomes unusable and undeletable by the same token.
+
+Rules evaluate but notify nobody until you point a contact point somewhere real, under
+Alerting -> Contact points. `--check` tells you a rule evaluates without erroring; it does not
+tell you the rule would ever fire. To confirm that, provision a copy with `for: 0s` and a
+threshold your current data crosses, watch it reach `firing`, then delete it.
+
 ## Troubleshooting
 
 | Symptom | Cause / what to do |

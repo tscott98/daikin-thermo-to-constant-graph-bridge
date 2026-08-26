@@ -112,11 +112,10 @@ and Refrigeration dashboards.
 
 1. ~~**Unit conversion in `/api/series`**~~ — **done**. Confirmed set served as
    `_f` and `_a`; the three uncertain fields as `_raw`.
-2. ~~**Alert rule**~~ — **done**, as `grafana/alerting/daikin-alerts.yaml`.
-   Two rules: collection stalled (>600s, two missed cycles) and any non-zero
-   fault. **Untested against a live Grafana** — provisioning schemas move
-   between versions. If import fails, build them in the UI; the thresholds and
-   reasoning are the durable part.
+2. ~~**Alert rule**~~ — **done and verified**, as `scripts/gen_alerts.py`. Six rules,
+   provisioned over the API and confirmed evaluating against the live instance. The
+   `daikin-alerts.yaml` this replaced was never importable at all.
+
 3. ~~**Exact runtime from the counter delta**~~ — **done**, but it does less
    than the first draft claimed. Measured against live data, the counter
    increments by exactly 1 per hour of compressor operation:
