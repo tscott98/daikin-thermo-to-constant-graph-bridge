@@ -162,6 +162,49 @@ and Refrigeration dashboards.
   uncalibrated. Superheat is charted raw because its *trend* is meaningful even
   when its scale is not; the other two are not charted at all.
 
+## Repository rename (decided, not done)
+
+`daikin-thermo-to-constant-graph-bridge` describes a one-way pipe between two
+named vendors, which is now the least of what this does.
+
+**`plenum` was chosen and then withdrawn.** There is a Plenum Home Assistant
+addon for HVAC zoning, which is a direct collision in the same niche -- and
+worse, that project *controls* the HVAC while this one is strictly read-only.
+Two same-named projects doing opposite things in one space is worse than a
+plain name clash. (Not independently verified: Reddit is unreachable from the
+tooling here and search did not surface it. Avoiding the name is cheap enough
+that confirming it is not worth blocking on.)
+
+Candidates, checked against GitHub for exact-name repos. Repo names only need
+to be unique within an owner's namespace, so this is about confusion and
+discoverability rather than availability:
+
+| Candidate | Exact-name repos | Note |
+|---|---|---|
+| **`returnair`** | none | recommended |
+| `supplyair` | none | |
+| `condensate` | 6* physics sim, 4* JS state lib | unrelated domains |
+| `wetbulb` | 3 tiny psychrometric calculators | implies a calculator library |
+| `degreedays` | tiny repos, but degreedays.net is an established service | avoid |
+| `airstream` | 627* plus a trailer brand | out |
+
+`returnair` is the recommendation: same register as plenum, one real HVAC noun,
+and the metaphor aims better. Return air is what comes back from the whole
+house carrying the aggregate state of every room, which is what this collects.
+It is observational by nature, correctly signalling a recorder rather than a
+controller, and it is vendor-neutral so it survives dropping ConstantGraph or
+Skyport.
+
+**Rename the GitHub repo only.** Leave `name` in `wrangler.toml` alone: changing
+it changes the workers.dev hostname, which breaks the Grafana datasource and
+with it all 45 panels and all six alert rules at once. Aligning the Worker name
+later is a deliberate migration -- deploy under the new name, update the
+Infinity datasource URL, re-push dashboards and alerts, then delete the old
+Worker.
+
+When the name is picked, update: README title, `package.json`, and the SETUP
+walkthrough.
+
 ## Dehumidification analysis (reference/hvac-dehumidification-brief.md)
 
 **Q4 answered, and it inverts the brief's main worry.** Dehumidification *is*

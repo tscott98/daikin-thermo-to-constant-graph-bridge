@@ -746,6 +746,42 @@ panel(8, "Outdoor air quality index", [("sp_aq_outdoor_aqi", "AQI"),
 ]
 
 
+ENERGY += [
+    panel(8, "Cost against cooling load, accumulated",
+          [("cum_degree_hours", "Cooling degree-hours"), ("cum_cost", "Cost")],
+          # No panel-level unit: on an XY chart it applies to both axes, which
+          # would label degree-hours in dollars. Units go on the fields.
+          {"h": 10, "w": 24, "x": 0, "y": 24}, unit="", ptype="xychart", fmt="table",
+          url="/api/series?from=$__from&to=$__to&interval=86400000&device=$device",
+          desc="One point per day, both axes running totals. These should fall "
+               "on a straight line: the same house losing the same heat per "
+               "degree costs the same per degree to cool. The slope is dollars "
+               "per degree-hour, currently about $0.0105, and that is the number "
+               "worth knowing -- it has the weather divided out, so it compares "
+               "across months and across summers in a way a monthly bill cannot. "
+               "A kink is the signal. Points drifting above the established line "
+               "mean the same weather costs more than it used to, which is what "
+               "a fouling coil or a lost charge looks like long before anything "
+               "reports a fault. Degree-hours are measured above a 65F base, "
+               "this house's measured balance point, and counted only while "
+               "power was being metered so both totals cover the same period. "
+               "Buckets are UTC days, so the first and last point are partial "
+               "and will sit off the line.",
+          overrides=[
+              {"matcher": {"id": "byName", "options": "Cooling degree-hours"},
+               "properties": [{"id": "unit", "value": "none"}]},
+              {"matcher": {"id": "byName", "options": "Cost"},
+               "properties": [{"id": "unit", "value": "currencyUSD"},
+                              {"id": "color", "value": {"mode": "fixed", "fixedColor": "green"}}]},
+          ],
+          opts={"mapping": "auto",
+                "series": [{"showPoints": "always", "pointSize": {"fixed": 9}}],
+                "legend": {"displayMode": "list", "placement": "bottom", "showLegend": False},
+                "tooltip": {"mode": "single"}},
+          custom={"show": "points", "pointSize": {"fixed": 9}}),
+]
+
+
 if __name__ == "__main__":
     import io
 

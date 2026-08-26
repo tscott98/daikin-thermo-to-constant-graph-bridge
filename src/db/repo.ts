@@ -677,6 +677,63 @@ function capabilityClause(): string[] {
   ];
 }
 
+/**
+ * Base temperature for cooling degree-hours, Fahrenheit.
+ *
+ * 65 F is the textbook convention, and it also happens to be this house's
+ * measured balance point: regressing outdoor power against outdoor temperature
+ * gave 81.1 W per degree with an x-intercept at 65. Below that the cooling load
+ * is nil, so degrees below it should not count toward accumulated load.
+ */
+const DEGREE_BASE_F = 65.0;
+
+/**
+ * Cost against accumulated cooling load, both running totals.
+ *
+ * Plotted against each other with one point per day, these should fall on a
+ * straight line: the same house losing the same heat per degree costs the same
+ * per degree to cool. The slope is dollars per degree-hour, and that is the
+ * number worth knowing -- it is comparable across months and across summers in
+ * a way that a monthly bill never is, because it has the weather divided out.
+ *
+ * A kink is the useful signal. Points drifting above the established line mean
+ * the same weather is costing more than it used to, which is what a fouling
+ * coil, a failing capacitor, or a lost charge looks like long before anything
+ * reports a fault. A step means something changed on a specific day, which is
+ * why config-change annotations are worth keeping.
+ *
+ * The window sums aggregates, so the inner SUM is per bucket and the outer one
+ * accumulates across them; SQLite evaluates window functions after GROUP BY,
+ * which makes that legal.
+ */
+function degreeHourClause(sampleSec: number, rate: number, bucket: number): string[] {
+  const outdoorF = `(temp_outdoor_c * 9.0 / 5.0 + 32.0)`;
+  const perSample = `MAX(${outdoorF} - ${DEGREE_BASE_F}, 0.0)`;
+  // Two-argument MAX is scalar in SQLite, so this clamps each sample rather
+  // than taking the maximum across the bucket.
+  const dh = `SUM(${perSample}) * ${sampleSec} / 3600.0`;
+
+  // The accumulating pair counts only samples that also carry a power reading.
+  // Otherwise the two totals start from different points -- weather is always
+  // recorded but Skyport enrichment can be absent -- and every dollars-per-
+  // degree-hour ratio is understated by however much load went unmetered. The
+  // plain degree_hours column stays unconditional, since as a weather figure it
+  // should not move because a metering source failed.
+  const metered = `CASE WHEN sp_outdoor_power IS NOT NULL THEN ${perSample} ELSE 0.0 END`;
+  const dhMetered = `SUM(${metered}) * ${sampleSec} / 3600.0`;
+  const hours = `(COUNT(sp_outdoor_power) * ${sampleSec} / 3600.0)`;
+  const cost = `AVG(sp_outdoor_power) * ${hours} / 1000.0 * ${rate}`;
+  const win = `OVER (PARTITION BY r.device_id ORDER BY (r.ts / ${bucket}))`;
+
+  return [
+    `ROUND(${dh}, 1) AS degree_hours`,
+    `ROUND(SUM(${dhMetered}) ${win}, 1) AS cum_degree_hours`,
+    rate > 0
+      ? `ROUND(SUM(${cost}) ${win}, 2) AS cum_cost`
+      : `NULL AS cum_cost`,
+  ];
+}
+
 /** The output name a select expression binds to, i.e. its trailing alias. */
 export function aliasOf(expr: string): string | null {
   return /\bAS\s+([A-Za-z_]\w*)\s*$/.exec(expr)?.[1] ?? null;
@@ -707,6 +764,7 @@ export function buildSelects(sampleSec = 300, rate = 0, bucket = 300): string[] 
     `MAX(sp_compressor_runtime) - LAG(MAX(sp_compressor_runtime))`
       + ` OVER (PARTITION BY r.device_id ORDER BY (r.ts / ${bucket})) AS compressor_runtime_delta`,
     ...energyClause(sampleSec, rate),
+    ...degreeHourClause(sampleSec, rate, bucket),
     ...psychroClause(),
     ...capacityClause(),
     ...airGradientClause(),

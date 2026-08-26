@@ -27,7 +27,9 @@ OUT = os.path.join("docs", "img")
 # panels off the bottom of the image.
 SHOTS = [
     ("daikin-air", "air-quality", "now-7d", 1400, 2100),
-    ("daikin-energy", "energy", "now-2d", 1400, 1500),
+    # 30 days: the cumulative panel accumulates over the selected range, so a
+    # short window makes it look like there is barely any history.
+    ("daikin-energy", "energy", "now-30d", 1400, 1900),
     ("daikin-health", "system-health", "now-2d", 1400, 2500),
     ("daikin-dehum", "dehumidification", "now-2d", 1400, 2800),
 ]
