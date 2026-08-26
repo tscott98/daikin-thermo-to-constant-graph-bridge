@@ -65,8 +65,29 @@ that has nothing to report. To test the whole path, provision a copy with `for`
 set to `0s` and a threshold current data must cross, confirm it reaches
 `firing`, then delete it.
 
-## Delivery
+## Delivery and repeat cadence
 
-Rules evaluate and show state in Grafana but notify nobody: the only contact
-point is Grafana Cloud's default, which points at `<example@email.com>`. Point
-it somewhere real under Alerting -> Contact points to start receiving them.
+Email, via the `grafana-default-email` contact point.
+
+You get one mail about 30s after a rule starts firing (`group_wait`), then a
+repeat for as long as it stays firing, then a "Resolved" mail when it clears.
+The repeat interval is set per severity, matched on the `service` and
+`severity` labels every rule here carries:
+
+| Severity | Rules | Repeat while firing |
+|---|---|---|
+| critical | collection stalled, equipment fault | 4 hours |
+| warning | humidity, PM2.5, CO2 | 12 hours |
+| info | filter due | 1 week |
+
+The split exists because a firing alert repeats until it is fixed, and these
+rules stay breached for very different lengths of time. Filter-due holds until
+the filter is physically changed, which can be weeks -- at the 4-hour default
+that is six mails a day about a chore, which is how a channel gets ignored.
+Humidity and air quality can sit breached through a whole spell of bad weather.
+Only the two that mean something is actually broken keep the short cadence.
+
+The routes match on `service=daikin-bridge`, so they change nothing for any
+other alert in this Grafana, now or later. If a rule is added without those two
+labels it falls through to the 4-hour root default rather than failing -- so
+check the labels when adding one.
