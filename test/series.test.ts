@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { readdirSync, readFileSync } from 'node:fs';
 import { aliasOf, buildAirSelects, buildSelects, skyportSelectClause } from '../src/db/repo';
-import { toFields } from '../src/api/query';
+import { parseSeriesQuery, toFields, toLastSeconds } from '../src/api/query';
 import { SKYPORT_COLUMNS } from '../src/skyport/map';
 
 describe('skyportSelectClause', () => {
@@ -193,5 +193,43 @@ describe('air series selection', () => {
     expect(sql).toContain('GROUP BY (ts / ${bucket})');
     expect(sql).not.toContain('GROUP BY (ts / ?)');
     expect(sql).toContain('args: [o.fromTs, o.toTs, o.limit]');
+  });
+});
+
+describe('toLastSeconds and the relative window', () => {
+  const now = 1_700_000_000;
+  const parse = (qs: string) => parseSeriesQuery(new URLSearchParams(qs), now);
+
+  it('ignores absent, zero, and unparseable values', () => {
+    for (const v of [null, '', '0', '-5', 'abc']) expect(toLastSeconds(v)).toBe(0);
+  });
+
+  it('caps absurd windows rather than trusting them', () => {
+    expect(toLastSeconds('999999999')).toBe(365 * 24 * 60 * 60);
+  });
+
+  it('sets the window relative to now', () => {
+    const o = parse('last=900');
+    expect(o.toTs).toBe(now);
+    expect(o.fromTs).toBe(now - 900);
+  });
+
+  it('wins over from/to, including uninterpolated macros', () => {
+    // The alerting evaluator sends $__from through literally. If from/to won,
+    // a rule would silently widen to the 24h fallback.
+    const o = parse('last=600&from=$__from&to=$__to');
+    expect(o.fromTs).toBe(now - 600);
+    expect(o.toTs).toBe(now);
+  });
+
+  it('still honours interval, fields and device alongside it', () => {
+    const o = parse('last=600&interval=300000&fields=hum_indoor&device=abc');
+    expect(o.bucketSec).toBe(300);
+    expect(o.fields).toEqual(new Set(['hum_indoor']));
+    expect(o.deviceId).toBe('abc');
+  });
+
+  it('falls back to the 24h default when absent', () => {
+    expect(parse('').fromTs).toBe(now - 24 * 60 * 60);
   });
 });

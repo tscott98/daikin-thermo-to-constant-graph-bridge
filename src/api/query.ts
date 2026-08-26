@@ -88,7 +88,40 @@ export function toRate(raw: string | null): number {
   return n;
 }
 
+/**
+ * Seconds of history for a `last=` relative window, or 0 for none.
+ *
+ * Grafana's dashboard panels interpolate $__from/$__to, but the alerting
+ * evaluator does not -- it sends the macros through literally, so the API sees
+ * no range and falls back to 24 hours. An alert reducing to the latest value
+ * does not need a day of history every five minutes, so rules ask for a window
+ * in the form the alerting path can actually express.
+ *
+ * Capped at a year; anything larger is a typo rather than an intent.
+ */
+export function toLastSeconds(raw: string | null): number {
+  const n = Number(raw);
+  if (raw === null || raw === '' || !Number.isFinite(n) || n <= 0) return 0;
+  return Math.min(Math.floor(n), 365 * 24 * 60 * 60);
+}
+
 export function parseSeriesQuery(q: URLSearchParams, nowSec: number): SeriesQuery {
+  // `last` wins over from/to, so a rule cannot accidentally widen its own
+  // window by leaving an uninterpolated macro in the URL.
+  const last = toLastSeconds(q.get('last'));
+  if (last > 0) {
+    return {
+      fromTs: nowSec - last,
+      toTs: nowSec,
+      bucketSec: toBucketSeconds(q.get('interval') ?? q.get('interval_ms')),
+      deviceId: q.get('device') ?? undefined,
+      limit: Math.min(Number(q.get('limit')) || DEFAULT_LIMIT, MAX_SERIES_ROWS),
+      csv: q.get('format') === 'csv',
+      ratePerKwh: toRate(q.get('rate')),
+      fields: toFields(q.get('fields')),
+    };
+  }
+
   const fromTs = toEpochSeconds(q.get('from'), nowSec - 24 * 60 * 60);
   const toTs = toEpochSeconds(q.get('to'), nowSec);
 
