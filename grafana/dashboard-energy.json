@@ -462,9 +462,9 @@
       },
       "description": "Set the panel interval to 1d. Energy is integrated from the sample count rather than the bucket width, so a gap in collection contributes nothing instead of being billed at the average rate. Outdoor unit only -- the blower is not included, because its power reading has an unverified scale.",
       "gridPos": {
-        "h": 8,
-        "w": 16,
-        "x": 0,
+        "h": 11,
+        "w": 15,
+        "x": 9,
         "y": 25
       },
       "targets": [
@@ -590,10 +590,10 @@
       },
       "description": "Sum of per-bucket cost across the dashboard time range, at the rate configured in RATE_PER_KWH. Outdoor unit only.",
       "gridPos": {
-        "h": 8,
-        "w": 8,
-        "x": 16,
-        "y": 25
+        "h": 6,
+        "w": 9,
+        "x": 0,
+        "y": 36
       },
       "targets": [
         {
@@ -776,60 +776,52 @@
       }
     },
     {
-      "id": 8,
-      "title": "Cost against cooling load, accumulated",
-      "type": "xychart",
       "datasource": {
         "type": "yesoreyeram-infinity-datasource",
         "uid": "${DS_INFINITY}"
       },
-      "description": "One point per day, both axes running totals. These should fall on a straight line: the same house losing the same heat per degree costs the same per degree to cool. The slope is dollars per degree-hour, currently about $0.0105, and that is the number worth knowing -- it has the weather divided out, so it compares across months and across summers in a way a monthly bill cannot. A kink is the signal. Points drifting above the established line mean the same weather costs more than it used to, which is what a fouling coil or a lost charge looks like long before anything reports a fault. Degree-hours are measured above a 65F base, this house's measured balance point, and counted only while power was being metered so both totals cover the same period. Buckets are UTC days, so the first and last point are partial and will sit off the line.",
-      "gridPos": {
-        "h": 10,
-        "w": 24,
-        "x": 0,
-        "y": 24
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "datasource": {
-            "type": "yesoreyeram-infinity-datasource",
-            "uid": "${DS_INFINITY}"
-          },
-          "type": "json",
-          "source": "url",
-          "parser": "backend",
-          "format": "table",
-          "url": "/api/series?from=$__from&to=$__to&interval=86400000&device=$device&fields=cum_degree_hours,cum_cost",
-          "url_options": {
-            "method": "GET"
-          },
-          "root_selector": "",
-          "columns": [
-            {
-              "selector": "cum_degree_hours",
-              "text": "Cooling degree-hours",
-              "type": "number"
-            },
-            {
-              "selector": "cum_cost",
-              "text": "Cost",
-              "type": "number"
-            }
-          ],
-          "filters": []
-        }
-      ],
+      "description": "One point per day, both axes running totals. These should fall on a straight line: the same house losing the same heat per degree costs the same per degree to cool. Each point is coloured by that day's own dollars-per-degree-hour, which is the local slope rather than the running average, so a bad day shows as a red dot instead of being smeared into an average. The colour scale is fixed at $0.008-0.014 rather than fitted to what is on screen: an auto-scaled ramp repaints on every view and would make a flat $0.0105 week look like it had good and bad days. A kink is the signal -- points drifting above the line mean the same weather costs more than it used to, which is what a fouling coil or a lost charge looks like long before anything reports a fault. Degree-hours are measured above a 65F base, this house's measured balance point, and counted only while power was being metered so both totals cover the same period. Buckets are UTC days, so the first and last point are partial and sit off the line.",
       "fieldConfig": {
         "defaults": {
-          "unit": "",
+          "color": {
+            "mode": "palette-classic"
+          },
           "custom": {
-            "show": "points",
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "fillOpacity": 50,
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "pointShape": "circle",
             "pointSize": {
               "fixed": 9
-            }
-          }
+            },
+            "pointStrokeWidth": 1,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "show": "points"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": ""
         },
         "overrides": [
           {
@@ -857,33 +849,202 @@
               {
                 "id": "color",
                 "value": {
-                  "mode": "fixed",
-                  "fixedColor": "green"
+                  "fixedColor": "green",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Rate"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "continuous-GrYlRd"
+                }
+              },
+              {
+                "id": "min",
+                "value": 0.008
+              },
+              {
+                "id": "max",
+                "value": 0.014
+              },
+              {
+                "id": "unit",
+                "value": "currencyUSD"
+              },
+              {
+                "id": "decimals",
+                "value": 5
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Linear regression Cost"
+            },
+            "properties": [
+              {
+                "id": "custom.show",
+                "value": "lines"
+              },
+              {
+                "id": "custom.pointSize",
+                "value": {
+                  "fixed": 1
+                }
+              },
+              {
+                "id": "custom.lineWidth",
+                "value": 2
+              },
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "dash": [
+                    8,
+                    5
+                  ],
+                  "fill": "dash"
+                }
+              },
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "text",
+                  "mode": "fixed"
                 }
               }
             ]
           }
         ]
       },
+      "gridPos": {
+        "h": 11,
+        "w": 9,
+        "x": 0,
+        "y": 25
+      },
+      "id": 8,
       "options": {
-        "mapping": "auto",
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "mapping": "manual",
         "series": [
           {
-            "showPoints": "always",
-            "pointSize": {
-              "fixed": 9
+            "color": {
+              "matcher": {
+                "id": "byName",
+                "options": "Rate"
+              }
+            },
+            "frame": {
+              "matcher": {
+                "id": "byIndex",
+                "options": 0
+              }
+            },
+            "x": {
+              "matcher": {
+                "id": "byName",
+                "options": "Cooling degree-hours"
+              }
+            },
+            "y": {
+              "matcher": {
+                "id": "byName",
+                "options": "Cost"
+              }
+            }
+          },
+          {
+            "frame": {
+              "matcher": {
+                "id": "byIndex",
+                "options": 1
+              }
+            },
+            "x": {
+              "matcher": {
+                "id": "byType",
+                "options": "number"
+              }
+            },
+            "y": {
+              "matcher": {
+                "id": "byType",
+                "options": "number"
+              }
             }
           }
         ],
-        "legend": {
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": false
-        },
         "tooltip": {
-          "mode": "single"
+          "hideZeros": false,
+          "mode": "single",
+          "sort": "none"
         }
-      }
+      },
+      "targets": [
+        {
+          "columns": [
+            {
+              "selector": "cum_degree_hours",
+              "text": "Cooling degree-hours",
+              "type": "number"
+            },
+            {
+              "selector": "cum_cost",
+              "text": "Cost",
+              "type": "number"
+            },
+            {
+              "selector": "cost_per_degree_hour",
+              "text": "Rate",
+              "type": "number"
+            }
+          ],
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "${DS_INFINITY}"
+          },
+          "filters": [],
+          "format": "table",
+          "parser": "backend",
+          "refId": "A",
+          "root_selector": "",
+          "source": "url",
+          "type": "json",
+          "url": "/api/series?from=$__from&to=$__to&interval=86400000&device=$device&fields=cum_degree_hours,cum_cost,cost_per_degree_hour",
+          "url_options": {
+            "method": "GET"
+          }
+        }
+      ],
+      "title": "Cost against cooling load, accumulated",
+      "transformations": [
+        {
+          "id": "regression",
+          "options": {
+            "modelType": "linear",
+            "predictionCount": 50,
+            "xFieldName": "Cooling degree-hours",
+            "yFieldName": "Cost"
+          }
+        }
+      ],
+      "type": "xychart",
+      "pluginVersion": "13.3.0-32481267925"
     }
   ]
 }

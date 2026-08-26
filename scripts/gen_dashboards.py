@@ -136,6 +136,9 @@ def dashboard(uid, title, description, panels, refresh="5m", time_from="now-7d",
 # Cadence: monthly, or when a bill surprises. Default range is 30 days because
 # a single day tells you nothing about cost.
 
+# Panel positions below reflect Tim's arrangement in the Grafana UI, pulled back
+# in rather than overwritten. If the layout is changed there, sync it here or the
+# next run of this script quietly reverts it.
 ENERGY = [
     panel(1, "Power draw", [("sp_outdoor_power", "Outdoor unit")],
           {"h": 8, "w": 16, "x": 0, "y": 0}, unit="watt",
@@ -196,7 +199,7 @@ ENERGY = [
 
     panel(6, "Energy and cost per day",
           [("energy_kwh", "kWh"), ("cost", "Cost")],
-          {"h": 8, "w": 16, "x": 0, "y": 25}, unit="kwatth",
+          {"h": 11, "w": 15, "x": 9, "y": 25}, unit="kwatth",
           desc="Set the panel interval to 1d. Energy is integrated from the "
                "sample count rather than the bucket width, so a gap in "
                "collection contributes nothing instead of being billed at the "
@@ -214,7 +217,7 @@ ENERGY = [
           ]),
 
     panel(7, "Cost for selected range", [("cost", "Cost")],
-          {"h": 8, "w": 8, "x": 16, "y": 25}, unit="currencyUSD", ptype="stat",
+          {"h": 6, "w": 9, "x": 0, "y": 36}, unit="currencyUSD", ptype="stat",
           desc="Sum of per-bucket cost across the dashboard time range, at the "
                "rate configured in RATE_PER_KWH. Outdoor unit only.",
           opts={**STAT_OPTS,
@@ -744,41 +747,136 @@ panel(8, "Outdoor air quality index", [("sp_aq_outdoor_aqi", "AQI"),
                "is driving it.",
           overrides=[color("AQI", "orange"), color_faint("AQI peak", "semi-dark-orange")]),
 ]
-
-
+# Panel 8 is written out in full rather than built through panel().
+#
+# xychart in manual mapping mode is unforgiving about its shape. It renders
+# "No data" -- no error, with the query returning rows perfectly well -- if the
+# y field has no explicit colour, if fieldConfig.defaults.color is missing, or
+# if the custom block is only partly filled in. Each reads as a broken query
+# rather than a missing default, and each costs a render to find. This dict was
+# verified against a live render, so it is kept literal.
+#
+# The fit comes from Grafana's regression transformation, which emits a second
+# frame. Its series is named "Linear regression Cost" -- that name is what the
+# override matches to draw it as a dashed line instead of 50 more points on top
+# of the data.
 ENERGY += [
-    panel(8, "Cost against cooling load, accumulated",
-          [("cum_degree_hours", "Cooling degree-hours"), ("cum_cost", "Cost")],
-          # No panel-level unit: on an XY chart it applies to both axes, which
-          # would label degree-hours in dollars. Units go on the fields.
-          {"h": 10, "w": 24, "x": 0, "y": 24}, unit="", ptype="xychart", fmt="table",
-          url="/api/series?from=$__from&to=$__to&interval=86400000&device=$device",
-          desc="One point per day, both axes running totals. These should fall "
-               "on a straight line: the same house losing the same heat per "
-               "degree costs the same per degree to cool. The slope is dollars "
-               "per degree-hour, currently about $0.0105, and that is the number "
-               "worth knowing -- it has the weather divided out, so it compares "
-               "across months and across summers in a way a monthly bill cannot. "
-               "A kink is the signal. Points drifting above the established line "
-               "mean the same weather costs more than it used to, which is what "
-               "a fouling coil or a lost charge looks like long before anything "
-               "reports a fault. Degree-hours are measured above a 65F base, "
-               "this house's measured balance point, and counted only while "
-               "power was being metered so both totals cover the same period. "
-               "Buckets are UTC days, so the first and last point are partial "
-               "and will sit off the line.",
-          overrides=[
-              {"matcher": {"id": "byName", "options": "Cooling degree-hours"},
-               "properties": [{"id": "unit", "value": "none"}]},
-              {"matcher": {"id": "byName", "options": "Cost"},
-               "properties": [{"id": "unit", "value": "currencyUSD"},
-                              {"id": "color", "value": {"mode": "fixed", "fixedColor": "green"}}]},
-          ],
-          opts={"mapping": "auto",
-                "series": [{"showPoints": "always", "pointSize": {"fixed": 9}}],
-                "legend": {"displayMode": "list", "placement": "bottom", "showLegend": False},
-                "tooltip": {"mode": "single"}},
-          custom={"show": "points", "pointSize": {"fixed": 9}}),
+    {   'datasource': {'type': 'yesoreyeram-infinity-datasource', 'uid': '${DS_INFINITY}'},
+        'description': 'One point per day, both axes running totals. These should fall on a '
+                       'straight line: the same house losing the same heat per degree costs the '
+                       "same per degree to cool. Each point is coloured by that day's own "
+                       'dollars-per-degree-hour, which is the local slope rather than the running '
+                       'average, so a bad day shows as a red dot instead of being smeared into an '
+                       'average. The colour scale is fixed at $0.008-0.014 rather than fitted to '
+                       'what is on screen: an auto-scaled ramp repaints on every view and would '
+                       'make a flat $0.0105 week look like it had good and bad days. A kink is the '
+                       'signal -- points drifting above the line mean the same weather costs more '
+                       'than it used to, which is what a fouling coil or a lost charge looks like '
+                       'long before anything reports a fault. Degree-hours are measured above a '
+                       "65F base, this house's measured balance point, and counted only while "
+                       'power was being metered so both totals cover the same period. Buckets are '
+                       'UTC days, so the first and last point are partial and sit off the line.',
+        'fieldConfig': {   'defaults': {   'color': {'mode': 'palette-classic'},
+                                           'custom': {   'axisBorderShow': False,
+                                                         'axisCenteredZero': False,
+                                                         'axisColorMode': 'text',
+                                                         'axisLabel': '',
+                                                         'axisPlacement': 'auto',
+                                                         'fillOpacity': 50,
+                                                         'hideFrom': {   'legend': False,
+                                                                         'tooltip': False,
+                                                                         'viz': False},
+                                                         'pointShape': 'circle',
+                                                         'pointSize': {'fixed': 9},
+                                                         'pointStrokeWidth': 1,
+                                                         'scaleDistribution': {'type': 'linear'},
+                                                         'show': 'points'},
+                                           'thresholds': {   'mode': 'absolute',
+                                                             'steps': [   {   'color': 'green',
+                                                                              'value': 0},
+                                                                          {   'color': 'red',
+                                                                              'value': 80}]},
+                                           'unit': ''},
+                           'overrides': [   {   'matcher': {   'id': 'byName',
+                                                               'options': 'Cooling degree-hours'},
+                                                'properties': [{'id': 'unit', 'value': 'none'}]},
+                                            {   'matcher': {'id': 'byName', 'options': 'Cost'},
+                                                'properties': [   {   'id': 'unit',
+                                                                      'value': 'currencyUSD'},
+                                                                  {   'id': 'color',
+                                                                      'value': {   'fixedColor': 'green',
+                                                                                   'mode': 'fixed'}}]},
+                                            {   'matcher': {'id': 'byName', 'options': 'Rate'},
+                                                'properties': [   {   'id': 'color',
+                                                                      'value': {   'mode': 'continuous-GrYlRd'}},
+                                                                  {'id': 'min', 'value': 0.008},
+                                                                  {'id': 'max', 'value': 0.014},
+                                                                  {   'id': 'unit',
+                                                                      'value': 'currencyUSD'},
+                                                                  {'id': 'decimals', 'value': 5}]},
+                                            {   'matcher': {   'id': 'byName',
+                                                               'options': 'Linear regression Cost'},
+                                                'properties': [   {   'id': 'custom.show',
+                                                                      'value': 'lines'},
+                                                                  {   'id': 'custom.pointSize',
+                                                                      'value': {'fixed': 1}},
+                                                                  {   'id': 'custom.lineWidth',
+                                                                      'value': 2},
+                                                                  {   'id': 'custom.lineStyle',
+                                                                      'value': {   'dash': [8, 5],
+                                                                                   'fill': 'dash'}},
+                                                                  {   'id': 'color',
+                                                                      'value': {   'fixedColor': 'text',
+                                                                                   'mode': 'fixed'}}]}]},
+        'gridPos': {'h': 11, 'w': 9, 'x': 0, 'y': 25},
+        'id': 8,
+        'options': {   'legend': {   'calcs': [],
+                                     'displayMode': 'list',
+                                     'placement': 'bottom',
+                                     'showLegend': True},
+                       'mapping': 'manual',
+                       'series': [   {   'color': {'matcher': {'id': 'byName', 'options': 'Rate'}},
+                                         'frame': {'matcher': {'id': 'byIndex', 'options': 0}},
+                                         'x': {   'matcher': {   'id': 'byName',
+                                                                 'options': 'Cooling '
+                                                                            'degree-hours'}},
+                                         'y': {'matcher': {'id': 'byName', 'options': 'Cost'}}},
+                                     {   'frame': {'matcher': {'id': 'byIndex', 'options': 1}},
+                                         'x': {'matcher': {'id': 'byType', 'options': 'number'}},
+                                         'y': {'matcher': {'id': 'byType', 'options': 'number'}}}],
+                       'tooltip': {'hideZeros': False, 'mode': 'single', 'sort': 'none'}},
+        'targets': [   {   'columns': [   {   'selector': 'cum_degree_hours',
+                                              'text': 'Cooling degree-hours',
+                                              'type': 'number'},
+                                          {   'selector': 'cum_cost',
+                                              'text': 'Cost',
+                                              'type': 'number'},
+                                          {   'selector': 'cost_per_degree_hour',
+                                              'text': 'Rate',
+                                              'type': 'number'}],
+                           'datasource': {   'type': 'yesoreyeram-infinity-datasource',
+                                             'uid': '${DS_INFINITY}'},
+                           'filters': [],
+                           'format': 'table',
+                           'parser': 'backend',
+                           'refId': 'A',
+                           'root_selector': '',
+                           'source': 'url',
+                           'type': 'json',
+                           'url': '/api/series?from=$__from&to=$__to&interval=86400000&device=$device&fields=cum_degree_hours,cum_cost,cost_per_degree_hour',
+                           'url_options': {'method': 'GET'}}],
+        'title': 'Cost against cooling load, accumulated',
+        'transformations': [   {   'id': 'regression',
+                                   'options': {   'modelType': 'linear',
+                                                  'predictionCount': 50,
+                                                  'xFieldName': 'Cooling degree-hours',
+                                                  'yFieldName': 'Cost'}}],
+        'type': 'xychart',
+        # Required. Without it xychart renders "No data" -- no error,
+        # with the query returning rows perfectly well. The panel uses it
+        # to pick config migrations, and an unversioned panel is treated
+        # as one it cannot read.
+        'pluginVersion': '13.3.0-32481267925'},
 ]
 
 

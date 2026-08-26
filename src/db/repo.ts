@@ -731,6 +731,15 @@ function degreeHourClause(sampleSec: number, rate: number, bucket: number): stri
     rate > 0
       ? `ROUND(SUM(${cost}) ${win}, 2) AS cum_cost`
       : `NULL AS cum_cost`,
+    // This bucket's own rate, not the running average. On a cumulative plot the
+    // local slope between two points is the efficiency for that day, and the
+    // ratio to the origin is not -- it is smeared by every day before it, so it
+    // lags exactly when a change matters. Colouring the points by this makes
+    // the slope readable per point rather than inferred from the line.
+    rate > 0
+      ? `ROUND(CASE WHEN ${dhMetered} > 0 THEN (${cost}) / (${dhMetered}) END, 5)
+           AS cost_per_degree_hour`
+      : `NULL AS cost_per_degree_hour`,
   ];
 }
 
