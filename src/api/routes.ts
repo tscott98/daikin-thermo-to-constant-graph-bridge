@@ -11,7 +11,7 @@
 import type { Env } from '../config';
 import { settingsFrom } from '../config';
 import { createDb } from '../db/client';
-import { getAirSeries, getSeries, getStats, listDevices } from '../db/repo';
+import { getAirSeries, getSeries, getStats, insertAirQualityBatch, listDevices } from '../db/repo';
 import { parseSeriesQuery } from './query';
 import { ConstantGraphClient } from '../constantgraph/client';
 import {
@@ -20,6 +20,7 @@ import {
   buildVariablesConfig,
 } from '../constantgraph/publish';
 import { runCycle } from '../cycle';
+import { AirGradientClient } from '../sensors/airgradient';
 
 /**
  * Indentation is opt-in because it is not free. Pretty-printing a series
@@ -178,6 +179,38 @@ async function route(request: Request, env: Env): Promise<Response> {
       fields: opts.fields,
     });
     return json(rows.map(toPoint), 200, false);
+  }
+
+  // POST /admin/backfill-air?from=&to=  -- replay air quality history.
+  //
+  // Only air quality can be recovered. Both Daikin APIs report current state
+  // only, so a gap in readings is permanent -- which is the whole reason this
+  // bridge keeps its own copy. AirGradient serves history, so an outage costs
+  // the thermostat trace but need not cost the air trace too.
+  //
+  // Rows are keyed on ts and written with INSERT OR IGNORE, so replaying a
+  // window that overlaps existing data cannot duplicate or overwrite it.
+  if (path === '/admin/backfill-air' && request.method === 'POST') {
+    const nowSec = Math.floor(Date.now() / 1000);
+    const opts = parseSeriesQuery(url.searchParams, nowSec);
+    const db = createDb(env);
+    const rows = await new AirGradientClient(env).readPast(opts.fromTs, opts.toTs);
+
+    // Snap to the same 5-minute grid the cron writes on, so a backfilled
+    // bucket lands on an existing slot rather than beside it.
+    const written = await insertAirQualityBatch(db, rows.map((r) => ({
+      ts: Math.floor(r.ts / 300) * 300,
+      temp_c: r.tempC, rh: r.rh, co2: r.co2, pm02: r.pm02,
+      pm01: r.pm01, pm10: r.pm10, tvoc_index: r.tvocIndex, nox_index: r.noxIndex,
+    })));
+
+    return json({
+      from: new Date(opts.fromTs * 1000).toISOString(),
+      to: new Date(opts.toTs * 1000).toISOString(),
+      returned: rows.length,
+      written,
+      skipped_existing: rows.length - written,
+    });
   }
 
   // GET /api/series -- time-bucketed rows for Grafana's Infinity data source.

@@ -845,20 +845,67 @@ export interface AirQualityRow {
  * thermostat. INSERT OR REPLACE keeps a re-poll or a CSV backfill idempotent;
  * `source` distinguishes a live poll from backfilled export rows.
  */
+/**
+ * Backfill many air-quality buckets in one round trip.
+ *
+ * The per-row insert is fine for the cron, which writes one bucket per cycle,
+ * but a backfill writes hundreds and every libSQL call is a subrequest -- a
+ * seven-hour gap replayed one row at a time hits the Worker's 50-subrequest
+ * ceiling long before it finishes. batch() sends the whole group as one.
+ *
+ * INSERT OR IGNORE throughout: a replayed window may overlap rows captured
+ * live, and a recovered value must never overwrite a measured one.
+ */
+export async function insertAirQualityBatch(
+  db: Db,
+  rows: Array<{ ts: number } & AirQualityRow>,
+): Promise<number> {
+  const usable = rows.filter((r) =>
+    [r.temp_c, r.rh, r.co2, r.pm02, r.pm01, r.pm10, r.tvoc_index, r.nox_index]
+      .some((v) => v !== null));
+  if (usable.length === 0) return 0;
+
+  const sql = `INSERT OR IGNORE INTO air_quality
+        (ts, temp_c, rh, co2, pm02, pm01, pm10, tvoc_index, nox_index, source)
+      VALUES (?,?,?,?,?,?,?,?,?,'backfill')`;
+  const statements: InStatement[] = usable.map((r) => ({
+    sql,
+    args: [r.ts, r.temp_c, r.rh, r.co2, r.pm02, r.pm01, r.pm10,
+           r.tvoc_index, r.nox_index],
+  }));
+
+  let written = 0;
+  // Chunked so one batch cannot grow past what libSQL will accept in a single
+  // request; each chunk is still one subrequest.
+  const CHUNK = 400;
+  for (let i = 0; i < statements.length; i += CHUNK) {
+    const res = await db.batch(statements.slice(i, i + CHUNK), 'write');
+    written += res.reduce((n, r) => n + Number(r.rowsAffected ?? 0), 0);
+  }
+  return written;
+}
+
 export async function insertAirQuality(
   db: Db,
   ts: number,
   a: AirQualityRow,
-): Promise<void> {
+  source: 'api' | 'backfill' = 'api',
+): Promise<number> {
   const values = [a.temp_c, a.rh, a.co2, a.pm02, a.pm01, a.pm10, a.tvoc_index, a.nox_index];
-  if (values.every((v) => v === null)) return;
+  if (values.every((v) => v === null)) return 0;
 
-  await db.execute({
-    sql: `INSERT OR REPLACE INTO air_quality
+  // The live poll REPLACEs: it is the authority for the bucket it is writing.
+  // A backfill IGNOREs, because it is replaying history that may overlap rows
+  // already captured live, and a recovered value must never quietly overwrite
+  // a measured one.
+  const verb = source === 'backfill' ? 'INSERT OR IGNORE' : 'INSERT OR REPLACE';
+  const res = await db.execute({
+    sql: `${verb} INTO air_quality
             (ts, temp_c, rh, co2, pm02, pm01, pm10, tvoc_index, nox_index, source)
-          VALUES (?,?,?,?,?,?,?,?,?,'api')`,
-    args: [ts, ...values],
+          VALUES (?,?,?,?,?,?,?,?,?,?)`,
+    args: [ts, ...values, source],
   });
+  return Number(res.rowsAffected ?? 0);
 }
 
 export interface AirSeriesOptions {

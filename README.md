@@ -669,3 +669,40 @@ Not affiliated with, endorsed by, or sponsored by Daikin, ConstantGraph, Cloudfl
 "Daikin" and "Daikin One" are trademarks of Daikin Industries, Ltd.; "ConstantGraph" is a
 trademark of its respective owner. Both APIs are used here as a customer of those services; you
 need your own accounts and credentials, and their terms govern your use of them.
+
+## Recovering after an outage
+
+What survives a gap depends entirely on whether the source keeps history.
+
+| Source | Retains history? | Recoverable |
+|---|---|---|
+| Daikin One (integrator) | No — point-in-time only | **Never** |
+| Daikin Skyport | No — point-in-time only | **Never** |
+| AirGradient | Yes | Yes, via `/admin/backfill-air` |
+| Duct probes (ConstantGraph) | Yes, 1 month raw | In principle, but see below |
+
+A gap in thermostat readings is permanent. Neither Daikin API reports anything
+but current state, so a sample nobody collected is gone — which is the entire
+reason this keeps its own copy rather than treating ConstantGraph as the store.
+
+Air quality is the exception, because AirGradient serves history:
+
+```bash
+curl -X POST -H "X-Api-Key: $READ_API_KEY" \
+  "$WORKER/admin/backfill-air?from=<epoch>&to=<epoch>"
+```
+
+Buckets are snapped to the same 5-minute grid the cron writes on, and inserted
+with `INSERT OR IGNORE` under `source = 'backfill'`, so replaying a window that
+overlaps live data can neither duplicate it nor overwrite a measured value with
+a recovered one. The response reports `written` against `skipped_existing`.
+Keep windows to a day or so: the whole batch is one round trip, but the API
+returns 5-minute buckets only for recent data and falls back to hourly further
+back.
+
+The duct probes are technically recoverable — ConstantGraph keeps a month of
+raw data and the read client already queries by time window — but their columns
+live on `readings` rows, and those rows do not exist for a gap. Backfilling
+them would mean synthesising reading rows carrying three columns and nulls
+everywhere else, which would make `samples` misleading and paper over the gap
+on every panel that counts it. Not done, deliberately.
