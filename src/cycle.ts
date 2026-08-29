@@ -6,6 +6,7 @@
  */
 
 import type { Env } from './config';
+import type { DeviceSummary } from './daikin/types';
 import { channelBaseFor, settingsFrom } from './config';
 import type { Db } from './db/client';
 import {
@@ -63,17 +64,32 @@ export async function runCycle(env: Env, db: Db): Promise<CycleResult> {
   const errors: string[] = [];
 
   const daikin = new DaikinClient(env, db);
-  const devices = await daikin.getDevices();
 
-  if (devices.length > 0) {
-    await upsertDevices(
-      db,
-      devices.map((summary, i) => ({
-        summary,
-        channelBase: channelBaseFor(settings.channelBase, i),
-      })),
-      nowSec,
-    );
+  // Guarded because this is the first await in the cycle, and an unguarded
+  // throw here takes down everything downstream with it -- the AirGradient
+  // read, both inserts, and the publish. That is not theoretical: a Daikin
+  // outage on 2026-08-28 stopped readings AND air_quality for 6h40m with
+  // identical gap boundaries in both tables, while /health kept answering
+  // normally because it only touches Turso.
+  //
+  // The rule everywhere else in this cycle is that one source failing costs
+  // its own columns and nothing more. This is that rule applied to the source
+  // that had been exempt from it.
+  let devices: DeviceSummary[] = [];
+  try {
+    devices = await daikin.getDevices();
+    if (devices.length > 0) {
+      await upsertDevices(
+        db,
+        devices.map((summary, i) => ({
+          summary,
+          channelBase: channelBaseFor(settings.channelBase, i),
+        })),
+        nowSec,
+      );
+    }
+  } catch (err) {
+    errors.push(`daikin devices: ${err instanceof Error ? err.message : String(err)}`);
   }
 
   // Sequential on purpose: Daikin allows at most 3 concurrent requests, and a
@@ -146,7 +162,12 @@ export async function runCycle(env: Env, db: Db): Promise<CycleResult> {
     }
   }
 
-  const inserted = await insertReadings(db, rows);
+  let inserted = 0;
+  try {
+    inserted = await insertReadings(db, rows);
+  } catch (err) {
+    errors.push(`insert readings: ${err instanceof Error ? err.message : String(err)}`);
+  }
 
   // Air quality is house-level, so it is stored once per cycle keyed on time
   // rather than copied onto every thermostat's row.
@@ -177,7 +198,12 @@ export async function runCycle(env: Env, db: Db): Promise<CycleResult> {
     errors.push(`publish: ${err instanceof Error ? err.message : String(err)}`);
   }
 
-  const pruned = await maybePrune(db, settings.rawRetentionDays, nowSec);
+  let pruned = 0;
+  try {
+    pruned = await maybePrune(db, settings.rawRetentionDays, nowSec);
+  } catch (err) {
+    errors.push(`prune: ${err instanceof Error ? err.message : String(err)}`);
+  }
 
   return {
     ts,

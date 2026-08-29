@@ -140,7 +140,13 @@ RULES = [
          "dashboard says which code; note that field is the fault LOG and stays "
          "populated after the condition clears, so trust these booleans for "
          "whether it is live.",
-         reducer="max"),
+         reducer="max",
+         # Not Alerting. Its query returns nothing whenever collection stops, so
+         # a NoData->Alerting default made every outage raise a second, false
+         # "equipment fault" alongside the true "stopped collecting" -- which it
+         # did on 2026-08-28. Two alerts for one cause is noise at exactly the
+         # moment the signal matters. Collection-stalled already covers silence.
+         no_data="OK"),
 
     # The dehumidification investigation in alert form. An hour of breach, so a
     # shower or a pot on the stove does not fire it.

@@ -45,3 +45,10 @@ AG_LOCATION_ID = "183155"
 #   CG_READ_API_KEY          ConstantGraph *read* key, for the duct sensors
 #   AG_TOKEN                 AirGradient place token, from app.airgradient.com/settings/place
 #   READ_API_KEY             self-issued key guarding this Worker's own read API
+
+# Retain Worker logs. Without this there is no record of why a cycle failed:
+# the 2026-08-28 outage had to be diagnosed from gap boundaries and Grafana's
+# alert history because nothing kept the exception. Free tier includes logs.
+[observability]
+enabled = true
+head_sampling_rate = 1
