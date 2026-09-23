@@ -1636,6 +1636,207 @@
         "graphMode": "none",
         "justifyMode": "auto"
       }
+    },
+    {
+      "datasource": {
+        "type": "yesoreyeram-infinity-datasource",
+        "uid": "${DS_INFINITY}"
+      },
+      "description": "Inverter amps per rev/sec against compressor speed. Not a trend line: the ratio rises with speed by design -- 0.064 at 10-20 rps against 0.094 at 80-90, because losses grow faster than output -- so a time series of it mostly tracks the weather. Plotted against speed instead, the points form a tight band (sd 0.004 within a 6-rps window), and what matters is a point sitting ABOVE the established curve: the drive needing more electrical effort for the same shaft speed than it used to. That is the early shape of a failing capacitor or a degrading winding, visible well before a fault register trips. Colour is outdoor temperature, so heat-driven excursions can be told apart from mechanical ones.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "fillOpacity": 50,
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "pointShape": "circle",
+            "pointSize": {
+              "fixed": 5
+            },
+            "pointStrokeWidth": 1,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "show": "points"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": ""
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Compressor rps"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "none"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Inverter A per rps"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "none"
+              },
+              {
+                "id": "decimals",
+                "value": 4
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "blue"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Outdoor"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "fahrenheit"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "continuous-BlYlRd"
+                }
+              },
+              {
+                "id": "min",
+                "value": 70
+              },
+              {
+                "id": "max",
+                "value": 105
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 12,
+        "x": 0,
+        "y": 57
+      },
+      "id": 30,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "mapping": "manual",
+        "series": [
+          {
+            "frame": {
+              "matcher": {
+                "id": "byIndex",
+                "options": 0
+              }
+            },
+            "x": {
+              "matcher": {
+                "id": "byName",
+                "options": "Compressor rps"
+              }
+            },
+            "y": {
+              "matcher": {
+                "id": "byName",
+                "options": "Inverter A per rps"
+              }
+            },
+            "color": {
+              "matcher": {
+                "id": "byName",
+                "options": "Outdoor"
+              }
+            }
+          }
+        ],
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "columns": [
+            {
+              "selector": "sp_compressor_rps",
+              "text": "Compressor rps",
+              "type": "number"
+            },
+            {
+              "selector": "inverter_a_per_rps",
+              "text": "Inverter A per rps",
+              "type": "number"
+            },
+            {
+              "selector": "outdoor_f",
+              "text": "Outdoor",
+              "type": "number"
+            }
+          ],
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "${DS_INFINITY}"
+          },
+          "filters": [],
+          "format": "table",
+          "parser": "backend",
+          "refId": "A",
+          "root_selector": "",
+          "source": "url",
+          "type": "json",
+          "url": "/api/series?from=$__from&to=$__to&interval=$__interval_ms&device=$device&fields=sp_compressor_rps,inverter_a_per_rps,outdoor_f",
+          "url_options": {
+            "method": "GET"
+          }
+        }
+      ],
+      "title": "Drive strain vs compressor speed",
+      "type": "xychart",
+      "pluginVersion": "13.3.0-32481267925"
     }
   ]
 }

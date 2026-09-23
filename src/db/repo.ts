@@ -743,6 +743,45 @@ function degreeHourClause(sampleSec: number, rate: number, bucket: number): stri
   ];
 }
 
+/**
+ * Inverter effort per unit of compressor speed.
+ *
+ * Current alone tracks how hard the compressor is working, which is mostly
+ * weather, so a high reading says "hot day" rather than "problem". Dividing by
+ * shaft speed removes most of that.
+ *
+ * It does NOT remove all of it, and the difference matters. Measured over a
+ * fortnight the ratio still climbs steadily with speed -- 0.064 at 10-20 rps
+ * against 0.094 at 80-90 -- because drive and motor losses grow faster than
+ * output does. So this is not a flat line with a fault threshold. It is only
+ * meaningful against other samples at the SAME speed, where the spread is
+ * tight (sd 0.004 within a 6-rps band). Read as a trend over time it will
+ * track the weather and mislead; read as a scatter against rps, a point
+ * sitting above the established curve is a drive working harder than it used
+ * to for the same output, which is what a failing capacitor or a degrading
+ * winding looks like before any fault register notices.
+ *
+ * This caveat is here because comparing raw current at a "similar" operating
+ * point produced a convincing false positive: a 28-36 rps band is wide enough
+ * that the current difference was speed, not strain.
+ *
+ * Averaged per sample rather than as a ratio of averages: a short excursion is
+ * exactly the thing worth catching, and dividing two bucket means would smooth
+ * it away. Below 5 rps the ratio divides by near-zero and means nothing, so it
+ * is NULL rather than a spike.
+ */
+function driveStrainClause(): string[] {
+  const live = 'sp_compressor_rps > 5';
+  return [
+    `ROUND(AVG(CASE WHEN ${live}
+                    THEN sp_inverter_current / 10.0 / sp_compressor_rps END), 4)
+       AS inverter_a_per_rps`,
+    `ROUND(AVG(CASE WHEN ${live}
+                    THEN sp_compressor_current / 10.0 / sp_compressor_rps END), 4)
+       AS compressor_a_per_rps`,
+  ];
+}
+
 /** The output name a select expression binds to, i.e. its trailing alias. */
 export function aliasOf(expr: string): string | null {
   return /\bAS\s+([A-Za-z_]\w*)\s*$/.exec(expr)?.[1] ?? null;
@@ -778,6 +817,7 @@ export function buildSelects(sampleSec = 300, rate = 0, bucket = 300): string[] 
     ...capacityClause(),
     ...airGradientClause(),
     ...capabilityClause(),
+    ...driveStrainClause(),
   ];
 }
 
